@@ -9,16 +9,19 @@ echo ${TAR_VER} | tee cbench_t_version.txt
 
 killall tarantool 2>/dev/null || true
 rm -rf 5* 0*
+sync
 echo 3 > /proc/sys/vm/drop_caches
 numactl --membind=1 --cpunodebind=1 --physcpubind=9 tarantool /opt/cbench/cbench_runner.lua memtx 2>&1 | tee cbench_output_memtx.txt
 
 killall tarantool 2>/dev/null || true
 rm -rf 5* 0*
+sync
 echo 3 > /proc/sys/vm/drop_caches
 numactl --membind=1 --cpunodebind=1 --physcpubind=10 tarantool /opt/cbench/cbench_runner.lua vinyl fsync 500 2>&1 | tee cbench_output_vinyl_fsync.txt
 
 killall tarantool 2>/dev/null || true
 rm -rf 5* 0*
+sync
 echo 3 > /proc/sys/vm/drop_caches
 numactl --membind=1 --cpunodebind=1 --physcpubind=11 tarantool /opt/cbench/cbench_runner.lua vinyl write 500 2>&1 | tee cbench_output_memtx_write.txt
 

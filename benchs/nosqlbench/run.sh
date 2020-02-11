@@ -16,6 +16,7 @@ kill `pidof tarantool`
 
 killall tarantool 2>/dev/null || true
 rm -rf 0*.xlog 0*.snap
+sync
 echo 3 > /proc/sys/vm/drop_caches
 
 #cd /opt/nosqlbench/
@@ -25,7 +26,7 @@ echo 3 > /proc/sys/vm/drop_caches
 #tarantool -v
 #
 free -h
-numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11 tarantool /opt/runners/nosqlbench-benchmarking/start_server_${type}.lua 2>&1 &
+numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11 tarantool `dirname $0`/tnt_${type}.lua 2>&1 &
 sed  "s/port 3303/port 3301/" /opt/nosqlbench/src/nosqlbench.conf -i
 #sed  "s/request_count 4000000/request_count 400000/" /opt/nosqlbench/src/nosqlbench.conf -i
 sed  "s/benchmark 'no_limit'/benchmark 'time_limit'/" /opt/nosqlbench/src/nosqlbench.conf -i
