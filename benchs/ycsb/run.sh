@@ -46,6 +46,8 @@ for l in a b c d e f ; do
         echo ---------------- ${l}: $r
         echo "tarantool.port=3301" >> $ws/workloads/workload${l}
         numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11 bin/ycsb load tarantool -s -P workloads/workload${l} >${res}.load 2>&1 || cat ${res}.load
+	sync
+	echo 3 > /proc/sys/vm/drop_caches
         numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11 bin/ycsb run tarantool -s -P workloads/workload${l} >${res}.log 2>&1 || cat ${res}.log
         grep Thro ${res}.log | awk '{ print "Overall result: "$3 }' | tee ${res}.txt
         sed "s#Overall result#$l $r#g" ${res}.txt >>${plogs}/results.txt

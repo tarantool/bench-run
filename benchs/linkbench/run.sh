@@ -30,6 +30,7 @@ sed "s/^maxid1 = .*/maxid1 = 5000000/g" -i /opt/linkbench/config/FBWorkload.prop
 sed "s/^requesters = .*/requesters = 1/g" -i $cfgfile
 sed "s/^requests = .*/requests = 2000000/g" -i $cfgfile
 $numaopts /opt/linkbench/bin/linkbench -c $cfgfile -l 2>&1 | tee loading.res.txt
+sync
 echo 3 > /proc/sys/vm/drop_caches
 $numaopts /opt/linkbench/bin/linkbench -c $cfgfile -r 2>&1 | tee linkbench_output.txt
 

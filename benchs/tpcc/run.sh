@@ -12,6 +12,7 @@ set -o pipefail
 
 killall tarantool tpcc_load 2>/dev/null || true
 rm -rf 0*.xlog 0*.snap
+sync
 echo 3 > /proc/sys/vm/drop_caches
 
 sed 's#box.sql#box#g' -i /opt/tpcc/create_table.lua
