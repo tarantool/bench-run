@@ -21,7 +21,7 @@ prepare:
 	docker push ${IMAGE_PERF}
 	# build Tarantool and benchmarks with depends on Tarantool sources
 	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
-		-t ${IMAGE_PERF_BUILT} -f bench-run/dockerfiles/ubuntu_tnt .
+		-t ${IMAGE_PERF_BUILT} --no-cache -f bench-run/dockerfiles/ubuntu_tnt .
 	docker push ${IMAGE_PERF_BUILT}
 
 # #####################################################
