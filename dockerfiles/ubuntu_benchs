@@ -70,3 +70,7 @@ WORKDIR /opt/linkbench
 RUN luarocks install \
     https://raw.githubusercontent.com/tarantool/gperftools/master/rockspecs/gperftools-scm-1.rockspec \
     --local >build.log 2>&1 || ( cat build.log && false )
+
+# adding python dependency
+RUN pip install requests
+

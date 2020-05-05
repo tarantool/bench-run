@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 
-kill `pidof tarantool`
-
-set -e
+set -eu
 set -o pipefail
 
 TAR_VER=$(tarantool -v | grep -e "Tarantool" |  grep -oP '\s\K\S*')
-echo ${TAR_VER} | tee linkbench_t_version.txt
+numaopts="numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11"
+base_dir=$(pwd)
 
 cd /opt/linkbench && mvn clean package -Dmaven.test.skip=true
 cd src/tarantool && make
 cd -
-
-numaopts="numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11"
 
 # use always newly created path specialy mounted if needed
 wpath=/builds/ws
@@ -30,8 +27,21 @@ sed "s/^maxid1 = .*/maxid1 = 5000000/g" -i /opt/linkbench/config/FBWorkload.prop
 sed "s/^requesters = .*/requesters = 1/g" -i $cfgfile
 sed "s/^requests = .*/requests = 2000000/g" -i $cfgfile
 $numaopts /opt/linkbench/bin/linkbench -c $cfgfile -l 2>&1 | tee loading.res.txt
-sync
+
+sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 $numaopts /opt/linkbench/bin/linkbench -c $cfgfile -r 2>&1 | tee linkbench_output.txt
 
-grep "REQUEST PHASE COMPLETED" linkbench_output.txt | sed "s/.*second = /linkbench:/" | tee -a linkbench_result.txt
+grep "REQUEST PHASE COMPLETED" linkbench_output.txt | sed "s/.*second = /linkbench:/" | tee -a linkbench.ssd_result.txt
+echo ${TAR_VER} | tee linkbench.ssd_t_version.txt
+cp -f linkbench.ssd_t_version.txt $base_dir
+cp -f linkbench.ssd_result.txt $base_dir
+
+echo "Tarantool TAG:"
+cat linkbench.ssd_t_version.txt
+echo "Overall results:"
+echo "================"
+cat linkbench.ssd_result.txt
+echo " "
+echo "Publish data to bench database"
+/opt/bench-run/benchs/publication/publish.py
