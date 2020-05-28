@@ -23,9 +23,15 @@ prepare:
 	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
 		-t ${IMAGE_PERF_BUILT} --no-cache -f bench-run/dockerfiles/ubuntu_tnt .
 	docker push ${IMAGE_PERF_BUILT}
+	# build Tarantool patched for TPC-H bench
+	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
+		-t ${IMAGE_PERF_TPCH_BUILT} --no-cache -f bench-run/dockerfiles/ubuntu_tnt_tpch .
+	docker push ${IMAGE_PERF_TPCH_BUILT}
 
 # #####################################################
 # Remove temporary performance image from the test host
 # #####################################################
 cleanup:
 	docker rmi --force ${IMAGE_PERF_BUILT}
+	docker rmi --force ${IMAGE_PERF_TPCH_BUILT}
+
