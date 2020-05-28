@@ -5,8 +5,8 @@ COPY . /opt/tarantool
 WORKDIR /opt/tarantool
 
 # patching Tarantool sources for using with TPC-H
-patch -p1 < /opt/tpch/patches/v1-0001-Restore-partial-date-time-support-in-Tarantool-SQ.patch
-patch -p1 < /opt/tpch/patches/v1-0002-Restore-date-datetime-tests.patch
+RUN patch -p1 < /opt/tpch/patches/v1-0001-Restore-partial-date-time-support-in-Tarantool-SQ.patch
+RUN patch -p1 < /opt/tpch/patches/v1-0002-Restore-date-datetime-tests.patch
 
 RUN git submodule update --recursive --init --force
 RUN ( cmake . -DENABLE_DIST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo >build.log 2>&1 \
