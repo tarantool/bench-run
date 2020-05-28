@@ -11,6 +11,8 @@ DOCKERFILE_BUILD=docker build --network=host
 #   images with always changed Tarantool sources and its
 #   depends benchmarks like 'cbench', image need to be
 #   removed after each testing to save the disk space
+# - perf_tmp_tpch/ubuntu-bionic:perf_<commit_SHA>
+#   image with patched Tarantool sources for TPC-H bench.
 # #########################################################
 prepare:
 	docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} \
@@ -23,9 +25,15 @@ prepare:
 	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
 		-t ${IMAGE_PERF_BUILT} --no-cache -f bench-run/dockerfiles/ubuntu_tnt .
 	docker push ${IMAGE_PERF_BUILT}
+	# build Tarantool patched for TPC-H bench
+	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
+		-t ${IMAGE_PERF_TPCH_BUILT} --no-cache -f bench-run/dockerfiles/ubuntu_tnt_tpch .
+	docker push ${IMAGE_PERF_TPCH_BUILT}
 
 # #####################################################
 # Remove temporary performance image from the test host
 # #####################################################
 cleanup:
 	docker rmi --force ${IMAGE_PERF_BUILT}
+	docker rmi --force ${IMAGE_PERF_TPCH_BUILT}
+
