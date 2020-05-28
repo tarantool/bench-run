@@ -14,4 +14,4 @@ RUN ( cmake . -DENABLE_DIST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo >build.log 2>&1
     ( cat build.log && false )
 
 # benchmarks runners
-RUN git clone https://github.com/tarantool/bench-run.git /opt/bench-run
+RUN git clone https://github.com/tarantool/bench-run.git --branch=opiskunov/add-tpch /opt/bench-run
