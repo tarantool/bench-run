@@ -7,7 +7,7 @@ numaopts="numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11"
 base_dir=$(pwd)
 
 cd /opt/tpch
-make TPC-H
+make TPC-H.db
 
 killall tarantool tpcc_load 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
