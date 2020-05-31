@@ -17,7 +17,7 @@ prepare:
 		${CI_REGISTRY}
 	# build all benchmarks w/o depends on Tarantool sources
 	${DOCKERFILE_BUILD} --add-host $(shell hostname):127.0.0.1 \
-		-t ${IMAGE_PERF} -f bench-run/dockerfiles/ubuntu_benchs .
+		-t ${IMAGE_PERF} --no-cache -f bench-run/dockerfiles/ubuntu_benchs .
 	docker push ${IMAGE_PERF}
 	# build Tarantool and benchmarks with depends on Tarantool sources
 	${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
