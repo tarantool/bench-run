@@ -7,20 +7,23 @@ numaopts="numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11"
 base_dir=$(pwd)
 
 cd /opt/tpch
-make TPC-H.db
 
-killall tarantool tpcc_load 2>/dev/null || true
+make create_SQL_db
+
+killall tarantool 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 
-$numaopts /opt/tpch/bench_queries.sh 2>&1 | tee bench-sqlite.log
-make 00000000000000000000.snap
+make bench-sqlite NUMAOPTS=$numaopts
 
-killall tarantool tpcc_load 2>/dev/null || true
+make create_TNT_db
+
+killall tarantool 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 
-$numaopts tarantool execute_query.lua -n 3 2>&1 | tee bench-tnt.log
+make bench-tnt NUMAOPTS=$numaopts
+
 make report
 sed "/-2/d" bench-tnt.csv | sed "s/;/:/" | sed "s/-1/0/" | tee tpc.h_result.txt
 
