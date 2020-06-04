@@ -73,6 +73,10 @@ RUN luarocks install \
     https://raw.githubusercontent.com/tarantool/gperftools/master/rockspecs/gperftools-scm-1.rockspec \
     --local >build.log 2>&1 || ( cat build.log && false )
 
+# TPC-H
+RUN git clone https://github.com/tarantool/tpch.git /opt/tpch
+RUN apt-get install -y -f sqlite3
+
 # adding python dependency
 RUN pip install requests
 
