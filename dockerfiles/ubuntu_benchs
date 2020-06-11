@@ -26,7 +26,9 @@ RUN ( cmake . >build.log 2>&1 && make -j >>build.log 2>&1 && \
     make install >>build.log 2>&1 ) || ( cat build.log && false )
 
 # msgpack-c
-RUN git clone https://github.com/msgpack/msgpack-c.git /opt/msgpack-c
+RUN mkdir /opt/msgpack-c && \
+        curl -L https://github.com/msgpack/msgpack-c/releases/download/cpp-3.3.0/msgpack-3.3.0.tar.gz \
+        | tar xvz -C /opt/msgpack-c --strip-components=1 >/dev/null
 WORKDIR /opt/msgpack-c
 RUN ( cmake . >build.log 2>&1 && make -j >>build.log 2>&1 && \
     make install >>build.log 2>&1 ) || ( cat build.log && false )
