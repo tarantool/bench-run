@@ -11,9 +11,11 @@ DOCKERFILE_BUILD=docker build --network=host
 #   images with always changed Tarantool sources and its
 #   depends benchmarks like 'cbench', image need to be
 #   removed after each testing to save the disk space
-# - perf_tmp_tpch/ubuntu-bionic:perf_<commit_SHA>
+# - perf_tmp/ubuntu-bionic:perf_<commit_SHA>_tpch
 #   image with patched Tarantool sources for TPC-H bench.
 # #########################################################
+IMAGE_PERF_TPCH_BUILT=${IMAGE_PERF_BUILT}_tpch
+
 prepare:
 	docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} \
 		${CI_REGISTRY}
