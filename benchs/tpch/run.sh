@@ -13,14 +13,14 @@ killall tarantool 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 
-make bench-sqlite NUMAOPTS=$numaopts
+make bench-sqlite NUMAOPTS="$numaopts"
 make create_TNT_db
 
 killall tarantool 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 
-make bench-tnt NUMAOPTS=$numaopts
+make bench-tnt NUMAOPTS="$numaopts"
 make report
 sed "/-2/d" bench-tnt.csv | sed "s/;/:/" | sed "s/-1/0/" | tee tpc.h_result.txt
 
