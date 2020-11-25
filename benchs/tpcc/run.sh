@@ -13,7 +13,6 @@ killall tarantool tpcc_load 2>/dev/null || true
 sync && echo "sync passed" || echo "sync failed with error" $?
 echo 3 > /proc/sys/vm/drop_caches
 
-sed 's#box.sql#box#g' -i /opt/tpcc/create_table.lua
 $numaopts tarantool /opt/tpcc/create_table.lua &
 sleep 5
 
@@ -23,7 +22,7 @@ sleep 5
 tpcc_opts="-h localhost -P 3301 -d tarantool -u root -p '' -w 15"
 
 cd /opt/tpcc
-. /opt/tpcc/load.sh tarantool 15
+/opt/tpcc/tpcc_load $tpcc_opts
 
 $numaopts /opt/tpcc/tpcc_start $tpcc_opts -r10 -l${TIME} -i${TIME} >tpcc_output.txt 2>/dev/null
 
