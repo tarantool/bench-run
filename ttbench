@@ -1,0 +1,149 @@
+#!/bin/bash
+
+set -euo pipefail
+
+TTBENCH_CONFIG=config.sh
+TTBENCH_BENCHES=all
+TTBENCH_COMMAND=
+TTBENCH_BENCHDIR=benches
+
+function error {
+	echo "ERROR:" "$@"
+	exit 100
+}
+
+function print_help {
+	grep '^\s*# HELP' "$0" | sed 's/^\s*# HELP\s//g'
+}
+
+function list_benchmarks {
+	for d in $TTBENCH_BENCHDIR/*; do
+		sed "s#$TTBENCH_BENCHDIR/##" <<< "$d"
+	done | grep -v common.sh
+}
+
+function run_bench {
+	local bench="$1"
+	local benchdir=
+	local workdir="${BENCH_WORKDIR:?}/$bench/"
+
+	cp "$TTBENCH_BENCHDIR/common.sh" "${BENCH_WORKDIR}"
+
+	export COMMON_FUNCTIONS="$BENCH_WORKDIR/common.sh"
+
+	if benchdir=$(env | grep "${bench^^}_DIR" | sed 's/^.*=//'); then
+		echo "Running $bench with workdir $benchdir" 1>&2
+		rm -rf "$workdir"
+		mkdir -p "$workdir"
+
+		cp -r "$TTBENCH_BENCHDIR/$bench"/* "$workdir"
+		cp -r "$benchdir"/* "$workdir"
+
+		local runner=
+		runner=$(readlink -f "$TTBENCH_BENCHDIR/$bench/run.sh")
+		pushd "$workdir" 1>/dev/null
+		"$runner"
+		popd 1>/dev/null
+	else
+		error "variable '${bench^^}_DIR' is not set in config, can't run benchmark"
+	fi
+}
+
+function run_benchmarks {
+	# must be set in config
+	[ -z "$BENCH_WORKDIR" ] && error "BENCH_WORKDIR is not set"
+
+	if [ "$TTBENCH_BENCHES" == all ]; then
+		for b in $(list_benchmarks); do
+			run_bench "$b"
+		done
+	else
+		IFS=, read -ra benchlist <<< "$TTBENCH_BENCHES"
+		# local benchlist=( $(sed 's/,/ /g' <<< "$TTBENCH_BENCHES") );
+		for b in "${benchlist[@]}"; do
+			if [ ! -d "$TTBENCH_BENCHDIR/$b" ]; then
+				error "Unknown benchmark='$b', please run '$0 list-benchmarks'"
+			fi
+		done
+
+		for b in "${benchlist[@]}"; do
+			run_bench "$b"
+		done
+	fi
+}
+
+# HELP ttbench - launch tarantool external benchmarks
+# HELP 
+# HELP Usage: ttbench [OPTIONS]... COMMAND
+# HELP 
+# HELP Available options are:
+while [[ $# -gt 0 ]]; do
+	option="$1"
+
+	case $option in
+		# HELP   -c, --config 'config_file'
+		# HELP           use given config file (defaults to config.sh)
+		# HELP 
+		-c|--config)
+			TTBENCH_CONFIG="${2:-}"
+			[ -z "$TTBENCH_CONFIG" ] && error "$option param can not be empty"
+			shift 2;;
+
+		# HELP   -d, --debug
+		# HELP           sets -x flag on whole script
+		# HELP 
+		-d|--debug)
+			set -x
+			shift;;
+
+		# HELP   -b, --benchmarks 'bench1,bench2'
+		# HELP           comma separated list of benchmarks (defauts to 'all')
+		# HELP 
+		-b|--benchmarks)
+			TTBENCH_BENCHES="${2:-}"
+			[ -z "$TTBENCH_BENCHES" ] && error "$option param can not be empty"
+			shift 2;;
+
+		# HELP   -h, --help
+		# HELP           print help message
+		# HELP 
+		-h|--help)
+			print_help
+			exit 0;;
+
+		*)
+			break;;
+	esac
+done
+
+[ -f "$TTBENCH_CONFIG" ] && source "$TTBENCH_CONFIG"
+
+TTBENCH_COMMAND="${1:-}"
+
+if [ -z "$TTBENCH_COMMAND" ]; then
+	print_help
+	echo "ERROR: no COMMAND specified" 1>&2
+	exit 1
+fi
+
+shift
+
+# HELP 
+# HELP Available commands are:
+case "$TTBENCH_COMMAND" in
+	# HELP   ls, list-benchmarks
+	# HELP           lists all known benchmarks
+	# HELP 
+	ls|list-benchmarks)
+		list_benchmarks;;
+
+	# HELP   run
+	# HELP           run benchmarks specified by --benchmarks flag
+	run)
+		run_benchmarks;;
+
+	*)
+		print_help
+		echo "ERROR: Unknown COMMAND='$TTBENCH_COMMAND'" 1>&2
+		exit 1;;
+esac
