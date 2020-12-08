@@ -65,7 +65,9 @@ function kill_tarantool {
 }
 
 function error {
-	echo "ERROR:" "$@"
+	local _caller
+	_caller=( $(caller 0) )
+	echo "${_caller[2]} line=${_caller[0]} fn=${_caller[1]} ERROR:" "$@"
 	exit 100
 }
 
@@ -97,7 +99,7 @@ function wait_for_tarantool_runnning {
 	local tt=0
 
 	while [ "$tt" -lt "$t" ]; do
-		if echo 'if type(box.cfg) ~= "function" then return box.info().status end' | tarantoolctl connect "$creds" 2>/dev/null | grep -q 'running'; then
+		if echo 'if type(box.cfg) ~= "function" then return box.info().status end' | "$TARANTOOLCTL_EXECUTABLE" connect "$creds" 2>/dev/null | grep -q 'running'; then
 			return 0
 		fi
 
@@ -106,4 +108,16 @@ function wait_for_tarantool_runnning {
 	done
 
 	return 1
+}
+
+function is_directory_empty {
+	local d="$1"
+
+	[ ! -d "$d" ] && error "no such directory '$d'"
+
+	if find "$d/" -maxdepth 1 -mindepth 1 | grep -q .; then
+		return 1
+	else
+		return 0
+	fi
 }

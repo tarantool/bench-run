@@ -4,62 +4,40 @@ set -euo pipefail
 
 TTBENCH_CONFIG=config.sh
 TTBENCH_BENCHES=all
+TTBENCH_SILENT=
+TTBENCH_FORCE=
 TTBENCH_COMMAND=
 TTBENCH_BENCHDIR=benches
 
-function error {
-	echo "ERROR:" "$@"
-	exit 100
-}
+TTBENCH_ENV_OVERRIDES=()
+
+source "$TTBENCH_BENCHDIR/common.sh"
 
 function print_help {
 	grep '^\s*# HELP' "$0" | sed 's/^\s*# HELP\s//g'
 }
 
-function list_benchmarks {
+function maybe_silently {
+	if [ -z "$TTBENCH_SILENT" ]; then
+		"$@"
+	else
+		"$@" 1>/dev/null 2>/dev/null
+	fi
+}
+
+function list_all_benchmarks {
 	for d in $TTBENCH_BENCHDIR/*; do
 		sed "s#$TTBENCH_BENCHDIR/##" <<< "$d"
 	done | grep -v common.sh
 }
 
-function run_bench {
-	local bench="$1"
-	local benchdir=
-	local workdir="${BENCH_WORKDIR:?}/$bench/"
-
-	cp "$TTBENCH_BENCHDIR/common.sh" "${BENCH_WORKDIR}"
-
-	export COMMON_FUNCTIONS="$BENCH_WORKDIR/common.sh"
-
-	if benchdir=$(env | grep "${bench^^}_DIR" | sed 's/^.*=//'); then
-		echo "Running $bench with workdir $benchdir" 1>&2
-		rm -rf "$workdir"
-		mkdir -p "$workdir"
-
-		cp -r "$TTBENCH_BENCHDIR/$bench"/* "$workdir"
-		cp -r "$benchdir"/* "$workdir"
-
-		local runner=
-		runner=$(readlink -f "$TTBENCH_BENCHDIR/$bench/run.sh")
-		pushd "$workdir" 1>/dev/null
-		"$runner"
-		popd 1>/dev/null
-	else
-		error "variable '${bench^^}_DIR' is not set in config, can't run benchmark"
-	fi
-}
-
-function run_benchmarks {
-	# must be set in config
-	[ -z "$BENCH_WORKDIR" ] && error "BENCH_WORKDIR is not set"
-
+function list_given_benchmarks {
 	if [ "$TTBENCH_BENCHES" == all ]; then
-		for b in $(list_benchmarks); do
-			run_bench "$b"
+		for b in $(list_all_benchmarks); do
+			echo "$b"
 		done
 	else
 		IFS=, read -ra benchlist <<< "$TTBENCH_BENCHES"
-		# local benchlist=( $(sed 's/,/ /g' <<< "$TTBENCH_BENCHES") );
 		for b in "${benchlist[@]}"; do
 			if [ ! -d "$TTBENCH_BENCHDIR/$b" ]; then
 				error "Unknown benchmark='$b', please run '$0 list-benchmarks'"
@@ -67,9 +45,133 @@ function run_benchmarks {
 		done
 
 		for b in "${benchlist[@]}"; do
-			run_bench "$b"
+			echo "$b"
 		done
 	fi
+}
+
+function get_bench_dir {
+	local bench="$1"
+	if benchdir=$(env | grep "${bench^^}_DIR" | sed 's/^.*=//'); then
+		echo "$benchdir"
+	else
+		error "variable '${bench^^}_DIR' is not set in config"
+	fi
+}
+
+function run_bench {
+	local bench="$1"
+	local benchdir=
+	local workdir="${BENCH_WORKDIR:?}/$bench/"
+
+	mkdir -p "$BENCH_WORKDIR"
+	cp "$TTBENCH_BENCHDIR/common.sh" "${BENCH_WORKDIR}"
+
+	export COMMON_FUNCTIONS="$BENCH_WORKDIR/common.sh"
+
+	local benchdir=
+	benchdir=$(get_bench_dir "$bench")
+
+	echo "Running $bench with workdir $benchdir" 1>&2
+	rm -rf "$workdir"
+	mkdir -p "$workdir"
+
+	cp -r "$TTBENCH_BENCHDIR/$bench"/* "$workdir"
+	cp -r "$benchdir"/* "$workdir"
+
+	# some of benchmarks have external dependencies that are stored in .rocks directory
+	# but some of benchmark do not have them
+	cp -r "$benchdir"/.rocks "$workdir" 2>/dev/null || true
+
+	local runner=
+	runner=$(readlink -f "$TTBENCH_BENCHDIR/$bench/run.sh")
+	pushd "$workdir" 1>/dev/null
+	"$runner"
+	popd 1>/dev/null
+}
+
+function run_benchmarks {
+	# must be set in config
+	[ -z "$BENCH_WORKDIR" ]           && error "BENCH_WORKDIR is not set"
+	[ -z "$TARANTOOL_EXECUTABLE" ]    && error "TARANTOOL_EXECUTABLE is not set"
+	[ -z "$TARANTOOLCTL_EXECUTABLE" ] && error "TARANTOOLCTL_EXECUTABLE is not set"
+
+	for b in $(list_given_benchmarks); do
+		run_bench "$b"
+	done
+}
+
+function install_benchmark {
+	local bench="$1"
+
+	local benchdir=
+	benchdir=$(get_bench_dir "$bench")
+
+	mkdir -p "$benchdir"
+
+	if ! is_directory_empty "$benchdir"; then
+		if [ -z "$TTBENCH_FORCE" ]; then
+			error "'$benchdir' is not empty, use --force flag to reinstall"
+		fi
+	fi
+
+	local bdir=
+	bdir=$(realpath "$benchdir")
+
+	local install_path_ok=
+
+	if [[ "$bdir" == /home/* ]]; then
+		install_path_ok=1
+	fi
+
+	if [[ "$bdir" == /opt/* ]]; then
+		install_path_ok=1
+	fi
+
+	if [[ "$bdir" == /tmp/* ]]; then
+		install_path_ok=1
+	fi
+
+	if [ -z "$install_path_ok" ]; then
+		echo "ERROR: benchmark install directory='$bdir' is"
+		echo "ERROR: neither under /home/"
+		echo "ERROR: nor under /opt/"
+		echo "ERROR: nor under /tmp/"
+		echo "ERROR: any other installation path is considered to be unsafe"
+		echo "ERROR: as it is required to run rm -rf on benchmark insall directory"
+		echo "ERROR: if you think this is an error, consider patching $0 yourself"
+		echo "ERROR: or installing the benchmarks manually"
+		error "unsafe install directory='$bdir' detected"
+	fi
+
+	rm -rf "${bdir:?}"
+	mkdir -p "$bdir"
+
+	local install_script="$TTBENCH_BENCHDIR/$bench/install.sh"
+	[ ! -f "$install_script" ] && error 
+	install_script=$(readlink -f "$TTBENCH_BENCHDIR/$bench/install.sh")
+
+	pushd "$bdir" 1>/dev/null
+	"$install_script"
+	popd 1>/dev/null
+}
+
+function run_install {
+	local benchlist
+	benchlist=( $(list_given_benchmarks) )
+
+	# running this in single loop for a side effect where get_bench_dir
+	# will raise an error if some env variables are not set
+	for b in "${benchlist[@]}"; do
+		get_bench_dir "$b"
+		if [ ! -f "$TTBENCH_BENCHDIR/$b/install.sh" ]; then
+			error "$TTBENCH_BENCHDIR/$b is missing install.sh script"
+		fi
+	done
+
+	for b in "${benchlist[@]}"; do
+		install_benchmark "$b"
+	done
 }
 
 # HELP ttbench - launch tarantool external benchmarks
@@ -96,6 +198,20 @@ while [[ $# -gt 0 ]]; do
 			set -x
 			shift;;
 
+		# HELP   -f, --force
+		# HELP           if used with install command, will reinstall benchmarks
+		# HELP 
+		-f|--force)
+			TTBENCH_FORCE=1
+			shift;;
+
+		# HELP   -s, --silent
+		# HELP           suppress any output, just give an exit code
+		# HELP 
+		-s|--silent)
+			TTBENCH_SILENT=1
+			shift;;
+
 		# HELP   -b, --benchmarks 'bench1,bench2'
 		# HELP           comma separated list of benchmarks (defauts to 'all')
 		# HELP 
@@ -103,6 +219,25 @@ while [[ $# -gt 0 ]]; do
 			TTBENCH_BENCHES="${2:-}"
 			[ -z "$TTBENCH_BENCHES" ] && error "$option param can not be empty"
 			shift 2;;
+
+		# HELP   -D, --define KEY=VALUE
+		# HELP   -DKEY=VALUE
+		# HELP           allows to define extra ENV variables
+		# HELP           or rewrite ones in config file from command line
+		# HELP 
+		-D|--define|-D*)
+			case "$option" in
+				-D|--define)
+					override="${2:-}"
+					[ -z "$override" ] && error "$option param can not be empty"
+					TTBENCH_ENV_OVERRIDES+=( "$override" )
+					shift 2;;
+				-D*)
+					override="${option#-D}"
+					[ -z "$override" ] && error "$option param can not be empty"
+					TTBENCH_ENV_OVERRIDES+=( "$override" )
+					shift;;
+			esac;;
 
 		# HELP   -h, --help
 		# HELP           print help message
@@ -116,7 +251,18 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-[ -f "$TTBENCH_CONFIG" ] && source "$TTBENCH_CONFIG"
+if [ -f "$TTBENCH_CONFIG" ]; then
+	source "$TTBENCH_CONFIG"
+else
+	error "config file='$TTBENCH_CONFIG' is absent"
+fi
+
+# Disgusting hack for empty arrays on bash < 4.4
+if [ 0 -ne "${#TTBENCH_ENV_OVERRIDES[@]}" ]; then
+	for override in "${TTBENCH_ENV_OVERRIDES[@]}"; do
+		export "$override"
+	done
+fi
 
 TTBENCH_COMMAND="${1:-}"
 
@@ -135,12 +281,18 @@ case "$TTBENCH_COMMAND" in
 	# HELP           lists all known benchmarks
 	# HELP 
 	ls|list-benchmarks)
-		list_benchmarks;;
+		maybe_silently list_all_benchmarks;;
 
 	# HELP   run
 	# HELP           run benchmarks specified by --benchmarks flag
+	# HELP 
 	run)
-		run_benchmarks;;
+		maybe_silently run_benchmarks;;
+
+	# HELP   install
+	# HELP           install benchmarks specified by --benchmarks flag
+	install)
+		maybe_silently run_install;;
 
 	*)
 		print_help

@@ -18,7 +18,11 @@ make -C src/tarantool -B
 tfile=src/tarantool/app.lua
 
 stop_and_clean_tarantool
-maybe_under_numactl "${numaopts[@]}" -- tarantool "$tfile" 1>/dev/null 2>/dev/null &
+
+lua_path_prefix="$PWD/.rocks/share/lua/5.1"
+
+export LUA_PATH="$lua_path_prefix/?.lua;$lua_path_prefix/?/init.lua"
+maybe_under_numactl "${numaopts[@]}" -- tarantool "$tfile" 1>ttserver.log 2>&1 &
 
 cfgfile=config/LinkConfigTarantool.properties
 sed "s/^maxid1 = .*/maxid1 = $LINKBENCH_WORKLOAD_SIZE/g" -i config/FBWorkload.properties
