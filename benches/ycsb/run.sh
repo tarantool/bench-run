@@ -12,8 +12,6 @@ YCSB_MEMTXMEMORY="${YCSB_MEMTXMEMORY:-2000000000}"
 YCSB_RUNS="${YCSB_RUNS:-1}"
 YCSB_WORKLOADS="${YCSB_WORKLOADS:-all}"
 
-TAR_VER=$(get_tarantool_version)
-
 function run_ycsb {
 	local mode="$1"
 	local srvlua="tarantool/src/main/conf/tarantool-${mode}.lua"
@@ -21,15 +19,17 @@ function run_ycsb {
 	sed 's/logger_nonblock.*//' -i "$srvlua"
 	sed 's/logger/log/' -i "$srvlua"
 	sed 's/read,write,execute/create,read,write,execute/' -i "$srvlua"
-	maybe_under_numactl "${numaopts[@]}" -- \
-		"$TARANTOOL_EXECUTABLE" "$srvlua" 2>&1 &
-	wait_for_tarantool_runnning 3301 10
-
 	local workloads=(a b c d e f)
 
 	if [ -n "$YCSB_WORKLOADS" -a "$YCSB_WORKLOADS" != "all" ]; then
-		IPS=, read -ra workloads <<< "$YCSB_WORKLOADS"
+		IFS=, read -ra workloads <<< "$YCSB_WORKLOADS"
 	fi
+
+	kill_tarantool 3301
+	wait_for_port_release 3301 10
+	maybe_under_numactl "${numaopts[@]}" -- \
+		"$TARANTOOL_EXECUTABLE" "$srvlua" 2>&1 &
+	wait_for_tarantool_runnning 3301 10
 
 	for l in "${workloads[@]}"; do
 		echo "=============== $l"
@@ -47,8 +47,6 @@ function run_ycsb {
 
 			grep Thro "${res}.log" | awk '{ print "Overall result: "$3 }' | tee "${res}.txt"
 			sed "s#Overall result#$l $r#g" "${res}.txt" >> "${plogs}/ycsb.${mode}_result.txt"
-
-			stop_and_clean_tarantool
 		done
 	done
 }
@@ -67,7 +65,6 @@ for f in workloads/workload[a-f] ; do
 	echo "tarantool.port=3301" >> "$f"
 done
 
-
 plogs=results
 rm -rf "$plogs"
 mkdir "$plogs"
@@ -75,12 +72,3 @@ mkdir "$plogs"
 for t in "${types[@]}"; do
 	run_ycsb "$t"
 done
-
-echo "${TAR_VER}" | tee "ycsb.${mode}_t_version.txt"
-cp -f "${plogs}/ycsb.${mode}_result.txt" .
-
-echo "Tarantool TAG:"
-cat "ycsb.${mode}_t_version.txt"
-echo "Overall results:"
-echo "================"
-cat "ycsb.${mode}_result.txt"

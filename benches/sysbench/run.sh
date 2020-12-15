@@ -34,8 +34,8 @@ opts=("--db-driver=${SYSBENCH_DBMS}" "--threads=${SYSBENCH_THREADS}")
 export LD_LIBRARY_PATH=/usr/local/lib
 
 if [ -n "$SYSBENCH_TESTS" -a "$SYSBENCH_TESTS" != all ]; then
-	IPS=, read -ra testlist <<< "$SYSBENCH_TESTS"
-	ARRAY_TESTS=$testlist
+	IFS=, read -ra testlist <<< "$SYSBENCH_TESTS"
+	ARRAY_TESTS=( "${testlist[@]}" )
 fi
 
 for test in "${ARRAY_TESTS[@]}"; do
@@ -47,7 +47,7 @@ for test in "${ARRAY_TESTS[@]}"; do
 		echo "$run"
 		echo "------------ $test ------------ rerun: # $run ------------"
 
-		stop_and_clean_tarantool
+		stop_and_clean_tarantool /tmp/tarantool-server.sock
 		wait_for_file_release /tmp/tarantool-server.sock 10
 		maybe_under_numactl "${numaconf[@]}" -- \
 			"$TARANTOOL_EXECUTABLE" tnt_srv.lua >tnt_server.txt 2>&1 \
@@ -90,3 +90,4 @@ cat Sysbench_t_version.txt
 echo "Overall results:"
 echo "================"
 cat Sysbench_result.txt
+kill_tarantool /tmp/tarantool-server.sock

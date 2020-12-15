@@ -8,13 +8,14 @@ export TARANTOOLCTL_EXECUTABLE=tarantoolctl
 # all the tests will be copied and run in this directory
 export BENCH_WORKDIR="$PWD/.benchdir"
 
-export CBENCH_DIR="$HOME/work/cbench/"
-export LINKBENCH_DIR="$HOME/work/linkbench/"
-export NOSQLBENCH_DIR="$HOME/work/nosqlbench/"
-export SYSBENCH_DIR="$HOME/work/sysbench/"
-export TPCC_DIR="$HOME/work/tpcc/"
-export TPCH_DIR="$HOME/work/tpch/"
-export YCSB_DIR="$HOME/work/ycsb/"
+installed="$PWD/.installed"
+export CBENCH_DIR="$installed/cbench/"
+export LINKBENCH_DIR="$installed/linkbench/"
+export NOSQLBENCH_DIR="$installed/nosqlbench/"
+export SYSBENCH_DIR="$installed/sysbench/"
+export TPCC_DIR="$installed/tpcc/"
+export TPCH_DIR="$installed/tpch/"
+export YCSB_DIR="$installed/ycsb/"
 
 # ----------------- BENCHMARK PARAMS -----------------
 # Fill free to delete all the params as long as all

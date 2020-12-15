@@ -13,11 +13,13 @@ TPCC_WAREHOUSES="${TPCC_WAREHOUSES:-15}"
 TPCC_FROMSNAPSHOT="${TPCC_FROMSNAPSHOT:-}"
 
 killall tpcc_load 2>/dev/null || true
-stop_and_clean_tarantool
+stop_and_clean_tarantool 3301
 
 tpcc_opts=(-h localhost -P 3301 -d tarantool -u root -p '' -w "$TPCC_WAREHOUSES")
 
 if [ -z "$TPCC_FROMSNAPSHOT" ]; then
+	kill_tarantool 3301
+	wait_for_port_release 3301 10
 	maybe_under_numactl "${numaopts[@]}" \
 		-- "$TARANTOOL_EXECUTABLE" init_empty.lua &
 	wait_for_tarantool_runnning 3301 15
@@ -27,6 +29,8 @@ else
 	[ ! -f "$TPCC_FROMSNAPSHOT" ] && error "No such file: '$TPCC_FROMSNAPSHOT'"
 	cp "$TPCC_FROMSNAPSHOT" .
 
+	kill_tarantool 3301
+	wait_for_port_release 3301 10
 	maybe_under_numactl "${numaopts[@]}" \
 		-- "$TARANTOOL_EXECUTABLE" init_not_empty.lua &
 	wait_for_tarantool_runnning 3301 60
@@ -39,6 +43,9 @@ maybe_under_numactl "${numaopts[@]}" -- \
 echo -n "tpcc:" | tee tpc.c_result.txt
 grep -e '<TpmC>' tpcc_output.txt | grep -oP '\K[0-9.]*' | tee -a tpc.c_result.txt
 cat tpcc_output.txt
+
+kill_tarantool 3301
+wait_for_port_release 3301 10
 
 echo "${TAR_VER}" | tee tpc.c_t_version.txt
 

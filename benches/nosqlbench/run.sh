@@ -14,13 +14,15 @@ NOSQLBENCH_WORKLOAD="${NOSQLBENCH_WORKLOAD:-}"
 NOSQLBENCH_TIMELIMIT="${NOSQLBENCH_TIMELIMIT:-20000}"
 NOSQLBENCH_BATCHCOUNT="${NOSQLBENCH_BATCHCOUNT:-10}"
 NOSQLBENCH_RPS="${NOSQLBENCH_RPS:-20000}"
+NOSQLBENCH_WORKLOADSIZE="${NOSQLBENCH_WORKLOADSIZE:-4000000}"
 
 TAR_VER=$(get_tarantool_version)
 numaopts=(--membind=1 --cpunodebind=1 '--physcpubind=6,7,8,9,10,11')
 
 function run_nosqlbench {
 	local type="$1"
-	stop_and_clean_tarantool
+	stop_and_clean_tarantool /tmp/tarantool-server.sock
+	wait_for_file_release /tmp/tarantool-server.sock 10
 
 	maybe_under_numactl "${numaopts[@]}" -- \
 		"$TARANTOOL_EXECUTABLE" "tnt_${type}.lua" 2>&1 &
@@ -33,6 +35,7 @@ function run_nosqlbench {
 	sed  "s/time_limit 10/time_limit $NOSQLBENCH_TIMELIMIT/" "$config" -i
 	sed  "s/request_batch_count 1/request_batch_count $NOSQLBENCH_BATCHCOUNT/" "$config" -i
 	sed  "s/rps 12000/rps $NOSQLBENCH_RPS/" "$config" -i
+	sed  "s/request_count 4000000/request_count $NOSQLBENCH_WORKLOADSIZE/" "$config" -i
 
 	sleep 5
 	echo "Run NB type='$type'"

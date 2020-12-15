@@ -45,6 +45,26 @@ function maybe_under_numactl {
 	fi
 }
 
+function get_owner_pid_port {
+	local port="$1"
+	netstat -lpn 2>/dev/null | grep ":$port" | awk '{ print $7 }' | sed 's#/.*$##'
+}
+
+function get_owner_pid_file {
+	local f="$1"
+	lsof "$f" 2>/dev/null | awk '{ print $2 }' | grep -v PID | sort | uniq
+}
+
+function get_owner_pid {
+	local identifier="$1"
+	if [[ "$identifier" =~ ^[0-9]+$ ]]; then
+		get_owner_pid_port "$identifier"
+		return 0
+	fi
+
+	get_owner_pid_file "$identifier"
+}
+
 function get_tarantool_version {
 	"$TARANTOOL_EXECUTABLE" -v | grep -e "Tarantool" |  grep -oP '\s\K\S*'
 }
@@ -61,7 +81,11 @@ function sync_disk {
 }
 
 function kill_tarantool {
-	killall tarantool 2>/dev/null || true
+	(
+		for pid in $(get_owner_pid "$1"); do
+			kill "$pid" || true
+		done
+	) || true
 }
 
 function error {
@@ -72,7 +96,7 @@ function error {
 }
 
 function stop_and_clean_tarantool {
-	kill_tarantool
+	kill_tarantool "$1"
 	clean_tarantool
 	sync_disk
 }
@@ -81,8 +105,28 @@ function wait_for_file_release {
 	local f="$1"
 	local t="$2"
 	local tt=0
+
+	[ ! -f "$f" ] && return 0
+
 	while [ "$tt" -lt "$t" ]; do
 		if ! lsof "$f" 1>/dev/null 2>/dev/null; then
+			return 0
+		fi
+
+		tt=$(( tt + 1 ))
+		sleep 1
+	done
+
+	return 1
+}
+
+function wait_for_port_release {
+	local p="$1"
+	local t="$2"
+	local tt=0
+
+	while [ "$tt" -lt "$t" ]; do
+		if ! netstat -lpn 2>/dev/null | grep -q ":$p"; then
 			return 0
 		fi
 

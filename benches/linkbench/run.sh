@@ -17,12 +17,13 @@ make -C src/tarantool -B
 
 tfile=src/tarantool/app.lua
 
-stop_and_clean_tarantool
+stop_and_clean_tarantool 3301
+wait_for_port_release 3301 10
 
 lua_path_prefix="$PWD/.rocks/share/lua/5.1"
 
 export LUA_PATH="$lua_path_prefix/?.lua;$lua_path_prefix/?/init.lua"
-maybe_under_numactl "${numaopts[@]}" -- tarantool "$tfile" 1>ttserver.log 2>&1 &
+maybe_under_numactl "${numaopts[@]}" -- "$TARANTOOL_EXECUTABLE" "$tfile" 1>ttserver.log 2>&1 &
 
 cfgfile=config/LinkConfigTarantool.properties
 sed "s/^maxid1 = .*/maxid1 = $LINKBENCH_WORKLOAD_SIZE/g" -i config/FBWorkload.properties
@@ -38,7 +39,8 @@ maybe_drop_cache
 maybe_under_numactl "${numaopts[@]}" -- \
 	./bin/linkbench -c "$cfgfile" -r 2>&1 | tee linkbench_output.txt
 
-kill_tarantool
+kill_tarantool 3301
+wait_for_port_release 3301 10
 
 grep "REQUEST PHASE COMPLETED" linkbench_output.txt | sed "s/.*second = /linkbench:/" | tee -a linkbench.ssd_result.txt
 echo "${TAR_VER}" | tee linkbench.ssd_t_version.txt

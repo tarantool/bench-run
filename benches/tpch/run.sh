@@ -14,19 +14,23 @@ if can_be_run_under_numa "${numaopts[@]}"; then
 	numastr="numactl ${numaopts[*]}"
 fi
 
-if [ -n "$TPCH_SKIP_SQLITE" ]; then
+if [ -z "$TPCH_SKIP_SQLITE" ]; then
 	make create_SQL_db
 
-	kill_tarantool
+	kill_tarantool 3301
+	wait_for_port_release 3301 10
 	sync_disk
 	maybe_drop_cache
 
 	make bench-sqlite NUMAOPTS="$numastr"
 fi
 
+kill_tarantool 3301
+wait_for_port_release 3301 10
 make create_TNT_db
 
-kill_tarantool
+kill_tarantool 3301
+wait_for_port_release 3301 10
 sync_disk
 maybe_drop_cache
 
