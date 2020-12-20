@@ -45,10 +45,36 @@ local function _get_bench_install_path(config, benchmark)
 	)
 end
 
-local function _list_results(config)
+local function _get_runinfo_filename(config)
+	return fio.abspath(fio.pathjoin(config.BENCH_WORKDIR, 'runinfo.json'))
+end
+
+local function _get_tarantool_version(config)
+	local e = exec({ config.env.TARANTOOL_EXECUTABLE, '--version'}, { output = 'PIPE' })
+	local res = utils.read_all(e)
+	return tostring(res:split('\n')[1]:split(' ')[2])
+end
+
+local function _list_results(config, verbose)
 	utils.mkdir(config.RESULT_DIR)
 	local list = fio.listdir(config.RESULT_DIR)
 	table.sort(list, function(a, b) return a > b end)
+	if verbose then
+		for i = 1, #list do
+			local ok = pcall(function()
+				local runinfo = utils.read_file(config.RESULT_DIR, list[i], 'runinfo.json')
+				runinfo = json.decode(runinfo)
+				list[i] = ("%s    %s    %s"):format(
+					list[i],
+					tostring(runinfo.tarantool_version),
+					os.date('%Y-%m-%dT%H:%M:%S', runinfo.start)
+				)
+			end)
+			if not ok then
+				list[i] = ("%s    broken"):format(list[i])
+			end
+		end
+	end
 	return list
 end
 
@@ -64,14 +90,29 @@ local function _get_run_id(config)
 	return _runid
 end
 
-local function _get_runinfo_filename(config)
-	return fio.abspath(fio.pathjoin(config.BENCH_WORKDIR, 'runinfo.json'))
-end
+local function _read_metrics(run, runInfo)
+	if not runInfo then
+		runInfo = json.decode(utils.read_file(run, 'runinfo.json'))
+	end
+	local metrics = {}
+	local metricsRaw = utils.read_file(run, 'metrics.jsons')
+	for _, l in pairs(metricsRaw:split('\n')) do
+		if l ~= '' then
+			local ok, data = pcall(json.decode, l)
+			if not ok then
+				output.debug(("line='%s'"):format(l))
+				error(("failed at line=%d run=%s: %s"):format(_, run, data))
+			end
+			data.m.run = runInfo.runid
+			if data.v == box.NULL then
+				local order = data.m.order or 1
+				data.v = (-1 * order) / 0
+			end
+			table.insert(metrics, data)
+		end
+	end
 
-local function _get_tarantool_version(config)
-	local e = exec({ config.env.TARANTOOL_EXECUTABLE, '--version'}, { output = 'PIPE' })
-	local res = utils.read_all(e)
-	return tostring(res:split('\n')[1]:split(' ')[2])
+	return metrics
 end
 
 function commands.list_benchmarks(opts, config)
@@ -198,7 +239,7 @@ function commands.save(opts, config)
 end
 
 function commands.list_results(opts, config)
-	return table.concat(_list_results(config), '\n')
+	return table.concat(_list_results(config, true), '\n')
 end
 
 function commands.delete_results(opts, config)
@@ -220,6 +261,25 @@ function commands.delete_results(opts, config)
 		end
 		utils.rm(fio.pathjoin(config.RESULT_DIR, run))
 	end
+end
+
+function commands.cat(opts, config)
+	local catList = opts.runs
+
+	if catList[1] == 'last' then
+		local l = _list_results(config)
+		catList = { l[1] }
+	end
+	utils.assert(#catList > 0, "no runs specifed")
+
+	local t = {}
+	for _, run in pairs(catList) do
+		for _, m in pairs(_read_metrics(fio.pathjoin(config.RESULT_DIR, run))) do
+			table.insert(t, utils.json(m))
+		end
+	end
+
+	return table.concat(t, '\n')
 end
 
 function commands.diff(opts, config)
@@ -250,21 +310,8 @@ function commands.diff(opts, config)
 		table.insert(runIDs, rInfo.runid)
 		table.insert(runInfos, rInfo)
 
-		local metricsRaw = utils.read_file(d, 'metrics.jsons')
-		for _, l in pairs(metricsRaw:split('\n')) do
-			if l ~= '' then
-				local ok, data = pcall(json.decode, l)
-				if not ok then
-					output.debug(("line='%s'"):format(l))
-					error(("failed at line=%d run=%s: %s"):format(_, d, data))
-				end
-				data.m.run = rInfo.runid
-				if data.v == box.NULL then
-					local order = data.m.order or 1
-					data.v = (-1 * order) / 0
-				end
-				table.insert(metrics, data)
-			end
+		for _, m in pairs(_read_metrics(d, rInfo)) do
+			table.insert(metrics, m)
 		end
 	end
 

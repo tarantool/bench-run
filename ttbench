@@ -40,6 +40,7 @@ local function main()
 	parser:add_command('list_results',    'list all saved results')
 	parser:add_command('delete_results',  'remove result record from saved list')
 	parser:add_command('diff',            'diff multiple runs results')
+	parser:add_command('cat',             'output results for multiple runs')
 
 	parser:parse(arg)
 
