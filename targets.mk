@@ -21,8 +21,6 @@ DOCKERFILE_BUILD=docker build --network=host
 #   image with patched Tarantool sources for TPC-H bench.
 # #########################################################
 
-IMAGE_PERF_TPCH_BUILT=${IMAGE_PERF_BUILT}_tpch
-
 prepare:
 	docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} \
 		${CI_REGISTRY}
@@ -35,19 +33,9 @@ prepare:
 		-t ${IMAGE_PERF_BUILT} --no-cache \
 		-f bench-run/dockerfiles/ubuntu_tnt .
 	docker push ${IMAGE_PERF_BUILT}
-	# Build image with patched Tarantool for TPC-H bench.
-	# The image uses Tarantool sources patching and should be
-	# updated each time sources changed and patching fails, so
-	# to avoid of fails of the images preparation process this
-	# build should be blocked from failing.
-	( ${DOCKERFILE_BUILD} --build-arg image_from=${IMAGE_PERF} \
-			-t ${IMAGE_PERF_TPCH_BUILT} --no-cache \
-			-f bench-run/dockerfiles/ubuntu_tnt_tpch . && \
-		docker push ${IMAGE_PERF_TPCH_BUILT} ) || :
 
 # #####################################################
 # Remove temporary performance image from the test host
 # #####################################################
 cleanup:
 	docker rmi --force ${IMAGE_PERF_BUILT}
-	docker rmi --force ${IMAGE_PERF_TPCH_BUILT} || :
