@@ -1,47 +1,64 @@
+#!/bin/bash
+
 # will not work if not under root
 # if benches are run localy by a developer droping caches might not be too important
 function maybe_drop_cache {
 	if test -w /proc/sys/vm/drop_caches; then
 		echo 3 > /proc/sys/vm/drop_caches
+	else
+		echo "disk cache was not dropped"
 	fi
 }
 
-function can_be_run_under_numa {
-	numactl "$@" true 1>/dev/null 2>/dev/null
-}
-
-# not every local machine has numa enabled on it
-# not every local machine has enough hardware units to run with intended configuration
-#
-# usage:
-# maybe_under_numactl numaoptions -- command to run
-# example:
-# maybe_under_numactl --membind=1 --cpunodebind=1 --physcpubind=11 -- echo qwe
-function maybe_under_numactl {
-	local numaoptions=()
-	local cmdoptions=()
-	local parsing_numa=1
-	for option in "$@"; do
-		if [ -n "$parsing_numa" ]; then
-			if [ "$option" == -- ]; then
-				parsing_numa=
-			else
-				numaoptions+=( "$option" )
-			fi
-		else
-			cmdoptions+=( "$option" )
-		fi
-	done
+# returns numactl options as string
+# available modes are
+#    tarantool - returns options that occupy the first 3 cores
+#    benchmark - returns options that occupy every core available except for first 3
+function get_numa_cpu_option {
+	local mode="$1"
+	case "$mode" in
+		tarantool)
+			true;;
+		benchmark)
+			true;;
+		*)
+			echo "Incorrect mode for numactl='$mode', available are 'tarantool', 'benchmark'"
+			return 1;;
+	esac
 
 	if which numactl 1>/dev/null 2>/dev/null; then
-		# check if it is even runable with given numactl options
-		if can_be_run_under_numa "${numaoptions[@]}"; then
-			numactl "${numaoptions[@]}" "${cmdoptions[@]}"
-		else
-			"${cmdoptions[@]}"
+		read -ra numacpu <<< "$(numactl --show | grep physcpubind | awk -F: '{ print $2 }')"
+		local ncpus="${#numacpu[@]}"
+
+		# it is useless to balance benchmark on cores if there are only 3 or less
+		# TODO: discuss - maybe it is useless to try to balance cores on even bigger core amounts
+		if [ "$ncpus" -le 3 ]; then
+			echo ""
 		fi
+
+		local option=
+		option="$(seq -s, 0 2)"
+		if [ "$mode" == 'benchmark' ]; then
+			option="$(seq -s, 3 "$(( ncpus - 1 ))")"
+		fi
+		echo "--physcpubind=$option"
 	else
-		"${cmdoptions[@]}"
+		echo ""
+	fi
+}
+
+# runs either tarantool or benchmark under numactl
+# if there are enough cores on the machine, this will ensure
+# that tarantool and the benchmark do not share cores
+function under_numa {
+	local mode="$1"
+	shift
+	local option
+	option="$(get_numa_cpu_option "$mode")"
+	if [ -z "$option" ]; then
+		"$@"
+	else
+		numactl "$option" -- "$@"
 	fi
 }
 

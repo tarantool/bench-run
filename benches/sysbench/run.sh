@@ -13,7 +13,6 @@ SYSBENCH_THREADS="${SYSBENCH_THREADS:-200}"
 SYSBENCH_RUNS="${SYSBENCH_RUNS:-10}"
 
 TAR_VER=$(get_tarantool_version)
-numaconf=(--membind=1 --cpunodebind=1 '--physcpubind=6,7,8,9,10,11')
 
 ARRAY_TESTS=(
 	"oltp_read_only"
@@ -49,9 +48,7 @@ for test in "${ARRAY_TESTS[@]}"; do
 
 		stop_and_clean_tarantool /tmp/tarantool-server.sock
 		wait_for_file_release /tmp/tarantool-server.sock 10
-		maybe_under_numactl "${numaconf[@]}" -- \
-			"$TARANTOOL_EXECUTABLE" tnt_srv.lua >tnt_server.txt 2>&1 \
-			|| ( cat tnt_server.txt && false )
+		under_numa 'tarantool' "$TARANTOOL_EXECUTABLE" tnt_srv.lua
 
 		sleep 1
 
@@ -60,7 +57,7 @@ for test in "${ARRAY_TESTS[@]}"; do
 		./src/sysbench "$test" "${opts[@]}" cleanup > sysbench_output.txt
 		./src/sysbench "$test" "${opts[@]}" prepare >> sysbench_output.txt
 
-		maybe_under_numactl "${numaconf[@]}" -- \
+		under_numa 'benchmark' \
 			./src/sysbench "$test" "${opts[@]}" \
 				"--time=${SYSBENCH_TIME}" \
 				"--warmup-time=${SYSBENCH_WARMUPTIME}" \

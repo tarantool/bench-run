@@ -12,7 +12,6 @@ export LUA_CPATH="$PWD/?.so"
 export LUA_PATH="$PWD/?/init.lua"
 
 TAR_VER=$(get_tarantool_version)
-numaopts=(--membind=1 --cpunodebind=1 --physcpubind=11)
 
 WORKLOADS=(
 	"memtx       $CBENCH_MEMTX_WORKLOAD"
@@ -34,7 +33,7 @@ for workload in "${WORKLOADS[@]}"; do
 	wait_for_file_release tarantool.pid 10
 	maybe_drop_cache
 
-	maybe_under_numactl "${numaopts[@]}" -- \
+	under_numa 'tarantool' \
 		"$TARANTOOL_EXECUTABLE" cbench_runner.lua "${workloadArr[@]}" | tee "$filename"
 done
 

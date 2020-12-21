@@ -7,11 +7,10 @@ source ../common.sh
 TPCH_SKIP_SQLITE="${TPCH_SKIP_SQLITE:-}"
 
 TAR_VER=$(get_tarantool_version)
-numaopts=(--membind=1 --cpunodebind=1 '--physcpubind=6,7,8,9,10,11')
-numastr=''
-
-if can_be_run_under_numa "${numaopts[@]}"; then
-	numastr="numactl ${numaopts[*]}"
+numastr=
+numastr="$(get_numa_cpu_option 'tarantool')"
+if [ -n "$numastr" ]; then
+	numastr="numactl $numastr"
 fi
 
 if [ -z "$TPCH_SKIP_SQLITE" ]; then

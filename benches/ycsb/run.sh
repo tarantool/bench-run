@@ -27,7 +27,7 @@ function run_ycsb {
 
 	kill_tarantool 3301
 	wait_for_port_release 3301 10
-	maybe_under_numactl "${numaopts[@]}" -- \
+	under_numa 'tarantool' \
 		"$TARANTOOL_EXECUTABLE" "$srvlua" 2>&1 &
 	wait_for_tarantool_runnning 3301 10
 
@@ -37,12 +37,12 @@ function run_ycsb {
 			local res="$plogs/run${l}_${r}"
 			echo "---------------- ${l}: $r"
 			echo "tarantool.port=3301" >> "workloads/workload${l}"
-			maybe_under_numactl "${numaopts[@]}" -- \
+			under_numa 'benchmark' \
 				./bin/ycsb load tarantool -s -P "workloads/workload${l}" > "${res}.load" 2>&1 || cat "${res}.load"
 			sync_disk
 			maybe_drop_cache
 
-			maybe_under_numactl "${numaopts[@]}" -- \
+			under_numa 'benchmark' \
 				./bin/ycsb run tarantool -s -P "workloads/workload${l}" > "${res}.log" 2>&1 || cat "${res}.log"
 
 			grep Thro "${res}.log" | awk '{ print "Overall result: "$3 }' | tee "${res}.txt"
@@ -56,8 +56,6 @@ types=(hash tree)
 if [ -n "$YCSB_TYPES" -a "$YCSB_TYPES" != 'all' ]; then
 	IPS=, read -ra types <<< "$YCSB_TYPES"
 fi
-
-numaopts=(--membind=1 --cpunodebind=1 '--physcpubind=6,7,8,9,10,11')
 
 for f in workloads/workload[a-f] ; do
 	sed "s#recordcount=.*#recordcount=$YCSB_RECORDCOUNT#g" -i "$f"

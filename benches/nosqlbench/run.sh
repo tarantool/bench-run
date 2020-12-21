@@ -17,14 +17,13 @@ NOSQLBENCH_RPS="${NOSQLBENCH_RPS:-20000}"
 NOSQLBENCH_WORKLOADSIZE="${NOSQLBENCH_WORKLOADSIZE:-4000000}"
 
 TAR_VER=$(get_tarantool_version)
-numaopts=(--membind=1 --cpunodebind=1 '--physcpubind=6,7,8,9,10,11')
 
 function run_nosqlbench {
 	local type="$1"
 	stop_and_clean_tarantool /tmp/tarantool-server.sock
 	wait_for_file_release /tmp/tarantool-server.sock 10
 
-	maybe_under_numactl "${numaopts[@]}" -- \
+	under_numa 'tarantool' \
 		"$TARANTOOL_EXECUTABLE" "tnt_${type}.lua" 2>&1 &
 
 	config=nosqlbench.conf
@@ -41,7 +40,7 @@ function run_nosqlbench {
 	echo "Run NB type='$type'"
 
 	# WARNING: don't try to save output from stderr - file will use the whole disk space !
-	(maybe_under_numactl "${numaopts[@]}" -- \
+	(under_numa 'benchmark' \
 		./src/nb "$config") \
 		| grep -v "Warmup" \
 		| grep -v "Failed to allocate" >nosqlbench_output.txt \
