@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -xeuo pipefail
 
 git clone https://github.com/tarantool/sysbench.git "$PWD"
 ./autogen.sh

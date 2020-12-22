@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # will not work if not under root
-# if benches are run localy by a developer droping caches might not be too important
+# if benches are run locally by a developer droping caches might not be too
+# important
 function maybe_drop_cache {
 	if test -w /proc/sys/vm/drop_caches; then
 		echo 3 > /proc/sys/vm/drop_caches
@@ -12,8 +13,8 @@ function maybe_drop_cache {
 
 # returns numactl options as string
 # available modes are
-#    tarantool - returns options that occupy the first 3 cores
-#    benchmark - returns options that occupy every core available except for first 3
+#    tarantool - returns options for the first 3 cores
+#    benchmark - returns options for every core available except for first 3
 function get_numa_cpu_option {
 	local mode="$1"
 	case "$mode" in
@@ -86,11 +87,13 @@ function get_tarantool_version {
 	"$TARANTOOL_EXECUTABLE" -v | grep -e "Tarantool" |  grep -oP '\s\K\S*'
 }
 
+# remove snapshots, wal-logs and vinyl directories
 function clean_tarantool {
-	rm -rf ./*.snap
-	rm -rf ./*.xlog
-	rm -rf ./*.vylog
-	rm -rf 5*
+	rm -rf \
+		./*.snap \
+		./*.xlog \
+		./*.vylog \
+		5*
 }
 
 function sync_disk {

@@ -5,11 +5,6 @@ set -o pipefail
 
 source ../common.sh
 
-# type=$1
-# if [ "$type" == "" ]; then
-#     type=hash
-# fi
-
 NOSQLBENCH_WORKLOAD="${NOSQLBENCH_WORKLOAD:-}"
 NOSQLBENCH_TIMELIMIT="${NOSQLBENCH_TIMELIMIT:-20000}"
 NOSQLBENCH_BATCHCOUNT="${NOSQLBENCH_BATCHCOUNT:-10}"

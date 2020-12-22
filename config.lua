@@ -58,9 +58,6 @@ local M = {
 		TPCC_TIME=20,
 		TPCC_WARMUPTIME=5,
 		TPCC_WAREHOUSES=15,
-		---- possible to start tpcc benchmark from snapshot wich I higly recommend
-		---- as tpcc_load takes a good portion of time to load the data
-		-- TPCC_FROMSNAPSHOT="/tmp/00000000000000033515.snap"
 
 		-- tpch parameters
 		TPCH_SKIP_SQLITE=1,

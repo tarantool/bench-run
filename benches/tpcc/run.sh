@@ -16,24 +16,13 @@ stop_and_clean_tarantool 3301
 
 tpcc_opts=(-h localhost -P 3301 -d tarantool -u root -p '' -w "$TPCC_WAREHOUSES")
 
-if [ -z "$TPCC_FROMSNAPSHOT" ]; then
-	kill_tarantool 3301
-	wait_for_port_release 3301 10
-	under_numa 'tarantool' \
-		"$TARANTOOL_EXECUTABLE" init_empty.lua &
-	wait_for_tarantool_runnning 3301 15
+kill_tarantool 3301
+wait_for_port_release 3301 10
+under_numa 'tarantool' \
+	"$TARANTOOL_EXECUTABLE" create_table.lua &
+wait_for_tarantool_runnning 3301 15
 
-	./tpcc_load "${tpcc_opts[@]}"
-else
-	[ ! -f "$TPCC_FROMSNAPSHOT" ] && error "No such file: '$TPCC_FROMSNAPSHOT'"
-	cp "$TPCC_FROMSNAPSHOT" .
-
-	kill_tarantool 3301
-	wait_for_port_release 3301 10
-	under_numa 'tarantool' \
-		"$TARANTOOL_EXECUTABLE" init_not_empty.lua &
-	wait_for_tarantool_runnning 3301 60
-fi
+./tpcc_load "${tpcc_opts[@]}"
 
 
 under_numa 'benchmark' \

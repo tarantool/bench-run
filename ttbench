@@ -87,6 +87,7 @@ local function main()
 	output.debug(("Command='%s'"):format(cmd))
 
 	if not cmd then
+		output.raw(parser:form_help_message())
 		error("Command was not specified")
 	end
 

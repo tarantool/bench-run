@@ -50,9 +50,7 @@ for test in "${ARRAY_TESTS[@]}"; do
 		wait_for_file_release /tmp/tarantool-server.sock 10
 		under_numa 'tarantool' "$TARANTOOL_EXECUTABLE" tnt_srv.lua
 
-		sleep 1
-
-		# ./run_tnt.sh >tnt_server.txt 2>&1 || ( cat tnt_server.txt && false )
+		wait_for_tarantool_runnning /tmp/tarantool-server.sock 10
 
 		./src/sysbench "$test" "${opts[@]}" cleanup > sysbench_output.txt
 		./src/sysbench "$test" "${opts[@]}" prepare >> sysbench_output.txt

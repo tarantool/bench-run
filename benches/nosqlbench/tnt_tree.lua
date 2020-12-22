@@ -1,7 +1,6 @@
 local console = require('console')
 console.listen("/tmp/tarantool-server.sock")
 
---memtx_memory = 2000000000,
 box.cfg {
     pid_file   = "./tarantool-server.pid",
     log        = "./tarantool-server.log",
