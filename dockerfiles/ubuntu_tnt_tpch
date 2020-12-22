@@ -7,8 +7,6 @@ WORKDIR /opt/tarantool
 # patching Tarantool sources for using with TPC-H
 RUN patch -p1 < /opt/tpch/patches/v1-0001-Restore-partial-date-time-support-in-Tarantool-SQ.patch \
     || ( echo "ERROR: Patch not ready for Tarantool sources !" && exit 1)
-RUN patch -p1 < /opt/tpch/patches/v1-0002-Restore-date-datetime-tests.patch \
-    || ( echo "ERROR: Patch not ready for Tarantool sources !" && exit 1)
 
 RUN git submodule update --recursive --init --force
 RUN ( cmake . -DENABLE_DIST=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo >build.log 2>&1 \
