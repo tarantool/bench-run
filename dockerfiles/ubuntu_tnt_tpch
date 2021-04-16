@@ -5,7 +5,7 @@ COPY . /opt/tarantool
 WORKDIR /opt/tarantool
 
 # patching Tarantool sources for using with TPC-H
-RUN patch -p1 < /opt/tpch/patches/v1-0001-Restore-partial-date-time-support-in-Tarantool-SQ.patch \
+RUN patch -p1 < /opt/tpch/patches/0001-sql-add-datetime-support-for-TPCH.patch \
     || ( echo "ERROR: Patch not ready for Tarantool sources !" && exit 1)
 
 RUN git submodule update --recursive --init --force
