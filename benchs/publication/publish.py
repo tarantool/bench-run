@@ -1,64 +1,78 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
+import argparse
 import fnmatch
+import logging
 import os
-from urllib import urlencode
+from typing import AnyStr
+from typing import List
+
 import requests
 
+from metrics import Metric
 
-def parse_bench(filename):
+URL = 'http://185.86.146.166:8086/api/v2/write?org=5d8890722b5f1318&bucket=metrics'  # NOQA
+
+
+def parse_bench(filename: str) -> List[AnyStr]:
     with open(filename) as raw_data:
         return raw_data.readlines()
 
 
-def get_version(filename):
+def get_version(filename: str) -> str:
+    """Get tarantool version from the file
+
+    Version is provided by benchmarks in a file <Benchmark>_t_version.txt.
+    Example: Sysbench_t_version.txt includes '2.10.0-beta1-113-g16f7bf1'.
+    """
     with open(filename) as raw_data:
         version = raw_data.readlines()[-1]
-        return version.split()[0]
+    version = version.split()[0]
+    if not version:
+        raise Exception("There was no version in a version file.")
+    return version
 
 
-def push_to_microb(server, token, name, value, version, tab):
-    uri = 'http://%s/push?%s' % (server, urlencode(dict(
-        key=token, name=name, param=value,
-        v=version, unit='trps', tab=tab
-    )))
+def post_to_database(metric: Metric) -> None:
+    """Post request to the database."""
+    response = requests.post(
+        URL, data=str(metric),
+        headers={'Authorization': f'Token {os.environ["INFLUXDB_TOKEN"]}'}
+    )
 
-    r = requests.get(uri)
-    if r.status_code == 200:
-        print('Export complete')
-    else:
-        print('Export error http: %d' % r.status_code)
-        print('Export error text: %d' % r.text)
+    logging.info(f"Sent metric: {metric} to the database. "
+                 f"Response is {response.status_code}")
+
+    if response.status_code >= 400:
+        raise Exception(f"Bad response: {response.status_code}")
 
 
-def main():
-    if "MICROB_WEB_TOKEN" in os.environ and "MICROB_WEB_HOST" in os.environ:
-        bench = {}
-        res = []
-        current_data = {}
-        version = ''
-        for file in os.listdir('.'):
-            if fnmatch.fnmatch(file, '*_result.txt'):
-                values = parse_bench(file)
-                benchmark = file.split('_')[0]
-                version = get_version('{}_t_version.txt'.format(benchmark))
-                for value in values:
-                    test_name = value.split(':')[0]
-                    test_res = float(value.split(':')[1])
-                    res.append(test_res)
-                    push_to_microb(
-                        os.environ['MICROB_WEB_HOST'],
-                        os.environ['MICROB_WEB_TOKEN'],
-                        test_name,
-                        test_res,
-                        version,
-                        benchmark,
-                    )
-        print ("VERSION - ", version)
-    else:
-        print("MICROB params not specified")
+def main(directory: str):
+    logging.info(f"Files will be published from {directory}")
+    for file in os.listdir(directory):
+        if fnmatch.fnmatch(file, '*_result.txt'):
+            logging.info(f"{file} was matched as file with results")
+            values = parse_bench(os.path.join(directory, file))
+            benchmark = file.split('_')[0]
+            version = get_version(
+                os.path.join(directory, '{}_t_version.txt'.format(benchmark)))
+            logging.info(f"VERSION - {version}")
+            for value in values:
+                test_name = value.split(':')[0]
+                test_res = float(value.split(':')[1])
+                metric = Metric(benchmark=benchmark,
+                                values={test_name: test_res})
+                post_to_database(metric)
 
     return 0
 
 
 if __name__ == '__main__':
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-f", "--from-directory", required=True,
+                    help="directory with files to publish")
+    args = ap.parse_args()
+
+    logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+
+    main(directory=args.from_directory)
