@@ -37,7 +37,7 @@ for test in "${ARRAY_TESTS[@]}"; do
     maxres=0
     for run in `eval echo {1..$runs}` ; do
         echo "------------ $test ------------ rerun: # $run ------------"
-        `dirname $0`/run_tnt.sh >tnt_server.txt 2>&1 || ( cat tnt_server.txt ; exit 1 )
+        "$PWD"/run_tnt.sh >tnt_server.txt 2>&1 || ( cat tnt_server.txt ; exit 1 )
 
         sysbench $test $opts cleanup >sysbench_output.txt
         sysbench $test $opts prepare >>sysbench_output.txt
@@ -69,6 +69,3 @@ cat Sysbench_t_version.txt
 echo "Overall results:"
 echo "================"
 cat Sysbench_result.txt
-echo " "
-echo "Publish data to bench database"
-/opt/bench-run/benchs/publication/publish.py

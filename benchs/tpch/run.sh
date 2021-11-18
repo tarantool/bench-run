@@ -39,6 +39,4 @@ echo " "
 echo "Overall result TNT:"
 echo "==================="
 cat tpc.h_result.txt
-echo " "
-echo "Publish data to bench database"
-/opt/bench-run/benchs/publication/publish.py
+
