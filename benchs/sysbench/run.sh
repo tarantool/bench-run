@@ -3,7 +3,7 @@
 set -eu
 set -o pipefail
 
-runs=10
+runs=${1:-10}
 
 TAR_VER=$(tarantool -v | grep -e "Tarantool" |  grep -oP '\s\K\S*')
 numaconf="numactl --membind=1 --cpunodebind=1 --physcpubind=6,7,8,9,10,11"
