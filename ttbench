@@ -1,0 +1,115 @@
+#!/usr/bin/env tarantool
+
+local fio   = require 'fio'
+local debug = require 'debug'
+
+local shortSource = debug.getinfo(1, "S").source:match('@(.+)')
+local source = fio.abspath(shortSource)
+local sourceDir = fio.dirname(source)
+package.path = ('%s;%s'):format(package.path, fio.pathjoin(sourceDir, '?.lua'))
+local defaultConfigPath = fio.pathjoin(sourceDir, 'config.lua')
+
+local config   = require 'lib.config'
+local output   = require 'lib.output'
+local commands = require 'lib.commands'
+local exec     = require 'lib.exec'
+local parser   = require 'lib.parser'
+
+local function main()
+	parser = parser()
+
+	parser:add_proginfo(shortSource, "manage tarantool benchmarks runs")
+
+	parser:add_flag('-h --help',      'show this message',                            false)
+	parser:add_flag('-s --silent',    'disable output',                               false)
+	parser:add_flag('-d --debug',     'enable debug output',                          false)
+	parser:add_flag('-f --force',     'force reinstall (if install command is used)', false)
+	parser:add_flag('-S --skip-save', 'skip saving results after benchmarks run',     false)
+
+	parser:add_argument('-b --benchmark', 'coma separated bench list', 'string', 'all')
+	parser:add_argument('-c --config',    'path to config file',       'string', defaultConfigPath)
+	parser:add_argument('-r --run-id',    'comma separated runs list', 'string', '')
+
+	parser:add_kv('-D', 'redefine env values from config')
+	parser:add_kv('-C', 'redefine first-level values from config')
+
+	parser:add_command('list_benchmarks', 'list all available benchmarks')
+	parser:add_command('install',         'install given benchmarks locally')
+	parser:add_command('run',             'run given benchmarks')
+	parser:add_command('save',            'save results of last benchmark run')
+	parser:add_command('list_results',    'list all saved results')
+	parser:add_command('delete_results',  'remove result record from saved list')
+	parser:add_command('diff',            'diff multiple runs results')
+	parser:add_command('cat',             'output results for multiple runs')
+
+	parser:parse(arg)
+
+	local opts = {
+		configFile     = parser:get_argument('--config'),
+		benchmarks     = parser:get_argument('--benchmark'),
+		debug          = parser:get_argument('--debug'),
+		silent         = parser:get_argument('--silent'),
+		force          = parser:get_argument('--force'),
+		skip_save      = parser:get_argument('--skip-save'),
+		runs           = parser:get_argument('--run-id'),
+		env_overwrites = parser:get_kv_argument('-D'),
+		cfg_overwrites = parser:get_kv_argument('-C'),
+	}
+
+	if opts.runs == '' then
+		opts.runs = {}
+	else
+		opts.runs = opts.runs:split(',')
+	end
+
+	output.set_silent(opts.silent)
+	output.set_debug(opts.debug)
+	exec.silent = opts.silent
+
+	output.debug("OPTIONS", opts)
+
+	local cfg = config(opts.configFile, opts.env_overwrites)
+	for k, v in pairs(opts.cfg_overwrites) do
+		if k == 'env' then
+			error("Illegal overwrite option='env', use -D flag for env overwrites")
+		end
+		cfg[k] = v
+	end
+
+	output.debug(cfg)
+
+	if parser:get_argument('--help') then
+		output.raw(parser:form_help_message())
+		return
+	end
+
+	local cmd = parser:get_command()
+	output.debug(("Command='%s'"):format(cmd))
+
+	if not cmd then
+		output.raw(parser:form_help_message())
+		error("Command was not specified")
+	end
+
+	local f = commands[cmd]
+	if not f then
+		error(("No handler found for command='%s'"):format(cmd))
+	end
+
+	return f(opts, cfg)
+end
+
+local ok, res = pcall(main)
+
+if not ok then
+	output.error(res)
+	os.exit(100)
+end
+
+if res then
+	output.raw(res)
+end
+
+os.exit(0)
+
+-- vim:syntax=lua
