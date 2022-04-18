@@ -3,12 +3,17 @@
 # Publish Tarantool performance metrics to InfluxDB database.
 
 import argparse
+import math
 import os
+import platform
 import sys
 
 import git
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
+
+NA_STR = 'n/a'
+PREV_RECORD_TIME_RANGE = -48  # in hours
 
 
 def parse_args():
@@ -30,6 +35,9 @@ def parse_args():
     parser.add_argument(
         '-t', '--token', default=env_opt('INFLUXDB_TOKEN'), help='InfluxDB token for making API requests'
     )
+    parser.add_argument(
+        '-p', '--prev', action='store_true', help='Add data of the previous DB record to the new record'
+    )
 
     return parser.parse_args()
 
@@ -47,15 +55,32 @@ def env_opt(name):
     return os.environ.get(name)
 
 
-def read_metrics_file(file_path):
+def load_metrics(file_path):
+    metrics = {}
     with open(file_path) as f:
-        return f.read().strip().splitlines()
+        for line in f.read().strip().splitlines():
+            if not line.startswith('#'):
+                line_as_list = line.split(':')
+                metrics[line_as_list[0].strip()] = float(line_as_list[1].strip())
+
+    return metrics
+
+
+def gmean(dataset, precision=3):
+    if not dataset:
+        raise ValueError('Given dataset must not be empty')
+
+    return round(math.exp(math.fsum(math.log(item) for item in dataset) / len(dataset)), precision)
+
+
+def div(a, b, precision=3):
+    return round(a / b, precision)
 
 
 def main(args):
     validate_args(args)
 
-    raw_metrics_as_list = read_metrics_file(args.file)
+    metrics = load_metrics(args.file)
     try:
         repo = git.Repo(args.repo)
     except git.exc.InvalidGitRepositoryError:
@@ -66,27 +91,91 @@ def main(args):
         point = Point(args.measurement)
 
         # Add fields.
-        for raw_metric in raw_metrics_as_list:
-            raw_metric_as_list = raw_metric.split(':')
-            field_key = raw_metric_as_list[0].strip()
-            field_value = float(raw_metric_as_list[1].strip())
-            point = point.field(field_key, field_value)
+
+        for field_key, field_value in metrics.items():
+            point = point.field(f"{field_key}.prev", 0.0)
+            point = point.field(f"{field_key}.curr", field_value)
+            point = point.field(f"{field_key}.prev_curr", 0.0)
+
+        point = point.field('gmean.prev', 0.0)
+        point = point.field('gmean.curr', gmean(metrics.values()))
+        point = point.field('gmean.prev_curr', 0.0)
 
         # Add tags.
-        tags_map = {
-            'branch_name': repo.active_branch.name,
-            'commit_sha': repo.head.commit.hexsha,
-            'build_version': repo.git.describe(),
-            'author_name': repo.head.commit.author.name,
-            'author_email': repo.head.commit.author.email,
-            'authored_date': repo.head.commit.authored_date * 10 ** 9,  # convert to nanoseconds
-            'committer_name': repo.head.commit.committer.name,
-            'committer_email': repo.head.commit.committer.email,
-            'committed_date': repo.head.commit.committed_date * 10 ** 9,  # convert to nanoseconds
-            'commit_summary': repo.head.commit.summary,
+
+        tags_prev = {
+            'branch_name.prev': NA_STR,
+            'commit_sha.prev': NA_STR,
+            'build_version.prev': NA_STR,
+            'author_name.prev': NA_STR,
+            'author_email.prev': NA_STR,
+            'authored_date.prev': NA_STR,
+            'committer_name.prev': NA_STR,
+            'committer_email.prev': NA_STR,
+            'committed_date.prev': NA_STR,
+            'commit_summary.prev': NA_STR,
+            'machine_type.prev': NA_STR,
+            'distribution_type.prev': NA_STR,
+            'gc64_enabled.prev': NA_STR,
         }
-        for tag_key, tag_value in tags_map.items():
+        tags_curr = {
+            'branch_name.curr': repo.active_branch.name,
+            'commit_sha.curr': repo.head.commit.hexsha,
+            'build_version.curr': repo.git.describe(),
+            'author_name.curr': repo.head.commit.author.name,
+            'author_email.curr': repo.head.commit.author.email,
+            'authored_date.curr': repo.head.commit.authored_date * 10**9,  # convert to nanoseconds
+            'committer_name.curr': repo.head.commit.committer.name,
+            'committer_email.curr': repo.head.commit.committer.email,
+            'committed_date.curr': repo.head.commit.committed_date * 10**9,  # convert to nanoseconds
+            'commit_summary.curr': repo.head.commit.summary,
+            'machine_type.curr': platform.machine(),
+            'distribution_type.curr': 'oss',
+            'gc64_enabled.curr': 'false',
+        }
+
+        point = point.tag('date.prev', NA_STR)
+        for tag_key, tag_value in {**tags_prev, **tags_curr}.items():
             point = point.tag(tag_key, tag_value)
+
+        # Add data of the previous DB record to the new record.
+        if args.prev:
+            query = (
+                f"from(bucket: \"{args.bucket}\") "
+                f"|> range(start: {PREV_RECORD_TIME_RANGE}h) "
+                f"|> filter(fn: (r) => r._measurement == \"{args.measurement}\") "
+                f"|> filter(fn: (r) => r[\"branch_name.curr\"] == \"{repo.active_branch.name}\") "
+                f"|> last()"
+            )
+
+            # Fill up fields.
+
+            tables = client.query_api().query(query, org=args.org)
+            if tables:
+                # Iterate exactly through the last tables. Tables are sorted by datetime.
+                # * 3 - because 'prev', 'curr', and 'prev_curr' values are defined for each metric.
+                # + 3 - the same just for gmean.
+                start_index = len(metrics.values()) * 3 + 3
+                for table in tables[-start_index:]:
+                    if len(table.records) != 1:
+                        raise ValueError('Not a single record')
+
+                    record = table.records[0]
+                    if record['_field'] == 'gmean.curr':
+                        point = point.field('gmean.prev', record['_value'])
+                    elif not record['_field'].startswith('gmean') and record['_field'].endswith('.curr'):
+                        field_key = record['_field'].replace('.curr', '.prev')
+                        point = point.field(field_key, record['_value'])
+                        point = point.field(f"{field_key}_curr", div(record['_value'], point._fields[record['_field']]))
+
+                point = point.field('gmean.prev_curr', div(point._fields['gmean.prev'], point._fields['gmean.curr']))
+
+                # Fill up tags.
+                point = point.tag('date.prev', int(record['_time'].timestamp() * 10**9))  # convert to nanoseconds
+                for tag_key in tags_prev:
+                    point = point.tag(tag_key, record[tag_key.replace('.prev', '.curr')])
+            else:
+                print('\nWARNING: No previous DB record found\n')
 
         # Publish data.
         client.write_api(write_options=SYNCHRONOUS).write(args.bucket, args.org, point)
