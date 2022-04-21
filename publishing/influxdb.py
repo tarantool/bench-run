@@ -25,6 +25,14 @@ def parse_args():
         '-f', '--file', required=True, help="Path to the file with metrics data where each line is '<key>: <value>'"
     )
     parser.add_argument(
+        '-s',
+        '--save',
+        nargs='?',
+        metavar='FILE',
+        const='db_record.txt',
+        help="Save the new DB record to the specified file in the 'line protocol' form",
+    )
+    parser.add_argument(
         '-r', '--repo', default='.', help='Path to the Tarantool git repository. Should be switched to relevant branch'
     )
     parser.add_argument(
@@ -177,7 +185,11 @@ def main(args):
         # Publish data.
         client.write_api(write_options=SYNCHRONOUS).write(args.bucket, args.org, point)
 
-        print(point)
+        if args.save:
+            with open(args.save, 'w') as f:
+                f.write(point.to_line_protocol())
+        else:
+            print(point)
 
 
 if __name__ == '__main__':
