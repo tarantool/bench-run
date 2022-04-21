@@ -74,6 +74,7 @@ def gmean(dataset, precision=3):
 
 
 def div(a, b, precision=3):
+    # `a` - 'curr' value, `b` - 'prev' value.
     return round(a / b, precision)
 
 
@@ -93,31 +94,16 @@ def main(args):
         # Add fields.
 
         for field_key, field_value in metrics.items():
-            point = point.field(f"{field_key}.prev", 0.0)
             point = point.field(f"{field_key}.curr", field_value)
-            point = point.field(f"{field_key}.prev_curr", 0.0)
+            point = point.field(f"{field_key}.prev", -1.0)  # -1 means 'not defined'
+            point = point.field(f"{field_key}.ratio", -1.0)
 
-        point = point.field('gmean.prev', 0.0)
         point = point.field('gmean.curr', gmean(metrics.values()))
-        point = point.field('gmean.prev_curr', 0.0)
+        point = point.field('gmean.prev', -1.0)
+        point = point.field('gmean.ratio', -1.0)
 
         # Add tags.
 
-        tags_prev = {
-            'branch_name.prev': NA_STR,
-            'commit_sha.prev': NA_STR,
-            'build_version.prev': NA_STR,
-            'author_name.prev': NA_STR,
-            'author_email.prev': NA_STR,
-            'authored_date.prev': NA_STR,
-            'committer_name.prev': NA_STR,
-            'committer_email.prev': NA_STR,
-            'committed_date.prev': NA_STR,
-            'commit_summary.prev': NA_STR,
-            'machine_type.prev': NA_STR,
-            'distribution_type.prev': NA_STR,
-            'gc64_enabled.prev': NA_STR,
-        }
         tags_curr = {
             'branch_name.curr': repo.active_branch.name,
             'commit_sha.curr': repo.head.commit.hexsha,
@@ -133,9 +119,24 @@ def main(args):
             'distribution_type.curr': 'oss',
             'gc64_enabled.curr': 'false',
         }
+        tags_prev = {
+            'branch_name.prev': NA_STR,
+            'commit_sha.prev': NA_STR,
+            'build_version.prev': NA_STR,
+            'author_name.prev': NA_STR,
+            'author_email.prev': NA_STR,
+            'authored_date.prev': NA_STR,
+            'committer_name.prev': NA_STR,
+            'committer_email.prev': NA_STR,
+            'committed_date.prev': NA_STR,
+            'commit_summary.prev': NA_STR,
+            'machine_type.prev': NA_STR,
+            'distribution_type.prev': NA_STR,
+            'gc64_enabled.prev': NA_STR,
+        }
 
         point = point.tag('date.prev', NA_STR)
-        for tag_key, tag_value in {**tags_prev, **tags_curr}.items():
+        for tag_key, tag_value in {**tags_curr, **tags_prev}.items():
             point = point.tag(tag_key, tag_value)
 
         # Add data of the previous DB record to the new record.
@@ -160,9 +161,11 @@ def main(args):
                     elif not record['_field'].startswith('gmean') and record['_field'].endswith('.curr'):
                         field_key = record['_field'].replace('.curr', '.prev')
                         point = point.field(field_key, record['_value'])
-                        point = point.field(f"{field_key}_curr", div(record['_value'], point._fields[record['_field']]))
+                        point = point.field(
+                            field_key.replace('.prev', '.ratio'), div(point._fields[record['_field']], record['_value'])
+                        )
 
-                point = point.field('gmean.prev_curr', div(point._fields['gmean.prev'], point._fields['gmean.curr']))
+                point = point.field('gmean.ratio', div(point._fields['gmean.curr'], point._fields['gmean.prev']))
 
                 # Fill up tags.
                 point = point.tag('date.prev', int(record['_time'].timestamp() * 10**9))  # convert to nanoseconds
