@@ -116,7 +116,7 @@ def main(args):
             'committed_date.curr': repo.head.commit.committed_date * 10**9,  # convert to nanoseconds
             'commit_summary.curr': repo.head.commit.summary,
             'machine_type.curr': platform.machine(),
-            'distribution_type.curr': 'oss',
+            'distribution_type.curr': 'ce',
             'gc64_enabled.curr': 'false',
         }
         tags_prev = {
