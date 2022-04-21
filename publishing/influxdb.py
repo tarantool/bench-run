@@ -145,22 +145,16 @@ def main(args):
                 f"|> range(start: {PREV_RECORD_TIME_RANGE}h) "
                 f"|> filter(fn: (r) => r._measurement == \"{args.measurement}\") "
                 f"|> filter(fn: (r) => r[\"branch_name.curr\"] == \"{repo.active_branch.name}\") "
-                f"|> last()"
+                f"|> group(columns: [\"_time\"], mode: \"by\") "
+                f"|> sort(columns: [\"_time\"])"
             )
 
             # Fill up fields.
 
             tables = client.query_api().query(query, org=args.org)
             if tables:
-                # Iterate exactly through the last tables. Tables are sorted by datetime.
-                # * 3 - because 'prev', 'curr', and 'prev_curr' values are defined for each metric.
-                # + 3 - the same just for gmean.
-                start_index = len(metrics.values()) * 3 + 3
-                for table in tables[-start_index:]:
-                    if len(table.records) != 1:
-                        raise ValueError('Not a single record')
-
-                    record = table.records[0]
+                # Tables are sorted by time. So taking the latest one.
+                for record in tables[-1]:
                     if record['_field'] == 'gmean.curr':
                         point = point.field('gmean.prev', record['_value'])
                     elif not record['_field'].startswith('gmean') and record['_field'].endswith('.curr'):
