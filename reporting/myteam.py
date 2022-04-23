@@ -15,8 +15,8 @@ def parse_args():
     parser.add_argument('-t', '--token', default=env_opt('MYTEAM_TOKEN'), help='MyTeam token for API requests')
     parser.add_argument('-c', '--chat-id', default=env_opt('MYTEAM_CHAT_ID'), help='MyTeam chat ID')
     parser.add_argument('-m', '--message', help='Message to send')
-    parser.add_argument('-f', '--file', help='Path to the file with message to send')
-    parser.add_argument('-F', '--format', choices=['Text', 'MarkdownV2'], default='Text', help='Message format to use')
+    parser.add_argument('-M', '--message-file', help='Path to the file with message to send')
+    parser.add_argument('-f', '--format', choices=['Text', 'MarkdownV2'], default='Text', help='Message format to use')
 
     return parser.parse_args()
 
@@ -33,15 +33,15 @@ def validate_args(args):
                 f"'MYTEAM_{arg_name.upper()}' env variable must be defined"
             )
 
-    for arg_name in ['message', 'file']:
+    for arg_name in ['message', 'message_file']:
         if getattr(args, arg_name) == '':
-            raise ValueError(f"Value for argument '--{arg_name}' must not be empty")
+            raise ValueError(f"Value for argument '--{arg_name.replace('_', '-')}' must not be empty")
 
-    if not any([args.message, args.file]):
-        raise ValueError("Argument '--message' or '--file' must be provided")
+    if not any([args.message, args.message_file]):
+        raise ValueError("Argument '--message' or '--message-file' must be provided")
 
-    if all([args.message, args.file]):
-        raise ValueError("Cannot use '--message' and '--file' arguments at the same time")
+    if all([args.message, args.message_file]):
+        raise ValueError("Cannot use '--message' and '--message-file' arguments at the same time")
 
 
 def main(args):
@@ -50,8 +50,8 @@ def main(args):
     bot = myteambot.Bot(api_url_base=args.url, token=args.token)
 
     message = args.message
-    if args.file:
-        with open(args.file) as f:
+    if args.message_file:
+        with open(args.message_file) as f:
             # All special characters that do not indicate the beginning or end of a text style must be escaped with
             # a backslash.
             message = f.read().strip().replace('_', '\\_')
