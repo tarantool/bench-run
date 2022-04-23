@@ -7,6 +7,24 @@ import math
 import sys
 
 VAL_COLUMN_NAMES = ['Curr(rps)', 'Prev(rps)', 'Ratio']
+COMMENTS_TEMPLATE = """
+# Curr:
+#   branch:  {curr_branch}
+#   build:   {curr_build}
+#   summary: {curr_summary}
+#   machine: {curr_machine}
+#   distrib: {curr_distrib}
+#   gc64:    {curr_gc64}
+# Prev:
+#   branch:  {prev_branch}
+#   build:   {prev_build}
+#   summary: {prev_summary}
+#   machine: {prev_machine}
+#   distrib: {prev_distrib}
+#   gc64:    {prev_gc64}
+"""
+ESCAPE_TO_PLACEHOLDER = {'\\ ': '<space>', '\\,': '<coma>', '\\=': '<equal>'}
+PLACEHOLDER_TO_CHAR = {'<space>': ' ', '<coma>': ',', '<equal>': '='}
 
 
 def parse_args():
@@ -31,17 +49,32 @@ def parse_args():
 
 
 def load_db_record(file_path):
-    record = {'name': {}, 'fields': {}}
+    record = {'name': {}, 'fields': {}, 'tags': {}}
 
     with open(file_path) as f:
         contents = f.read().strip()
 
-    record['name'] = contents.split(',')[0]
-    for raw_metric_entry in contents.split(' ')[-1].split(','):
-        metric_entry_as_list = raw_metric_entry.split('=')
-        record['fields'][metric_entry_as_list[0]] = float(metric_entry_as_list[1])
+    left_record_part, right_record_part = contents.rpartition(' ')[::2]
+    record['name'], raw_tags_part = left_record_part.partition(',')[::2]
+
+    for raw_metric_entry in right_record_part.split(','):
+        full_metric_name, metric_value = raw_metric_entry.partition('=')[::2]
+        metric_name, metric_type = full_metric_name.rpartition('.')[::2]
+        record['fields'].setdefault(metric_type, {})[metric_name] = float(metric_value)
+
+    for raw_tag_entry in replace(raw_tags_part, ESCAPE_TO_PLACEHOLDER).split(','):
+        full_tag_name, tag_value = raw_tag_entry.partition('=')[::2]
+        tag_name, tag_type = full_tag_name.rpartition('.')[::2]
+        record['tags'].setdefault(tag_type, {})[tag_name] = replace(tag_value, PLACEHOLDER_TO_CHAR)
 
     return record
+
+
+def replace(string, replace_map):
+    for old, new in replace_map.items():
+        string = string.replace(old, new)
+
+    return string
 
 
 def gen_table(columns, column_names=None, name_column_size='auto', val_column_size='auto', val_precision=3):
@@ -89,18 +122,31 @@ def gen_table(columns, column_names=None, name_column_size='auto', val_column_si
 
 def main(args):
     record = load_db_record(args.input)
-    columns = {}
+    columns = {'metric': [], 'curr': [], 'prev': [], 'ratio': []}
 
-    for full_metric_name, value in sorted(record['fields'].items()):
-        name_as_list = full_metric_name.rsplit('.', maxsplit=1)
-        metric_name = name_as_list[0]
-        metric_type = name_as_list[-1]
-        if metric_name not in columns.get('metric', []):
-            columns.setdefault('metric', []).append(metric_name)
-        columns.setdefault(metric_type, []).append(value if value > 0 else math.nan)
+    for metric_type in record['fields']:
+        for metric_name, value in sorted(record['fields'][metric_type].items(), key=lambda x: x[0]):
+            if metric_name not in columns.get('metric', []):
+                columns['metric'].append(metric_name)
+            columns[metric_type].append(value if value > -1 else math.nan)
 
+    comments_template = COMMENTS_TEMPLATE.lstrip()
+    comments = comments_template.format(
+        curr_branch=record['tags']['curr']['branch_name'],
+        curr_build=record['tags']['curr']['build_version'],
+        curr_summary=record['tags']['curr']['commit_summary'],
+        curr_machine=record['tags']['curr']['machine_type'],
+        curr_distrib=record['tags']['curr']['distribution_type'],
+        curr_gc64=record['tags']['curr']['gc64_enabled'],
+        prev_branch=record['tags']['prev']['branch_name'],
+        prev_build=record['tags']['prev']['build_version'],
+        prev_summary=record['tags']['prev']['commit_summary'],
+        prev_machine=record['tags']['prev']['machine_type'],
+        prev_distrib=record['tags']['prev']['distribution_type'],
+        prev_gc64=record['tags']['prev']['gc64_enabled'],
+    )
     column_names = [record['name'].capitalize(), *VAL_COLUMN_NAMES]
-    table = gen_table(columns, column_names)
+    table = comments + gen_table(columns, column_names)
 
     if args.output:
         with open(args.output, 'w') as f:
