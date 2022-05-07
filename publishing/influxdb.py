@@ -13,7 +13,7 @@ from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 NA_STR = 'n/a'
-PREV_RECORD_TIME_RANGE = -48  # in hours
+PREV_RECORD_TIME_RANGE = '-1mo'  # in months
 
 
 def parse_args():
@@ -151,7 +151,7 @@ def main(args):
         if args.prev:
             query = (
                 f"from(bucket: \"{args.bucket}\") "
-                f"|> range(start: {PREV_RECORD_TIME_RANGE}h) "
+                f"|> range(start: {PREV_RECORD_TIME_RANGE}) "
                 f"|> filter(fn: (r) => r._measurement == \"{args.measurement}\") "
                 f"|> filter(fn: (r) => r[\"branch_name.curr\"] == \"{repo.active_branch.name}\") "
                 f"|> group(columns: [\"_time\"], mode: \"by\") "
