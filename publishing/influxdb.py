@@ -68,8 +68,8 @@ def load_metrics(file_path):
     with open(file_path) as f:
         for line in f.read().strip().splitlines():
             if not line.startswith('#'):
-                line_as_list = line.split(':')
-                metrics[line_as_list[0].strip()] = float(line_as_list[1].strip())
+                name, value = line.partition(':')[::2]
+                metrics[name.strip()] = float(value.strip())
 
     return metrics
 
