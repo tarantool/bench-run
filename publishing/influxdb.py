@@ -143,7 +143,7 @@ def main(args):
             'gc64_enabled.prev': NA_STR,
         }
 
-        point = point.tag('date.prev', NA_STR)
+        point = point.tag('record_date.prev', NA_STR)
         for tag_key, tag_value in {**tags_curr, **tags_prev}.items():
             point = point.tag(tag_key, tag_value)
 
@@ -176,7 +176,7 @@ def main(args):
                 point = point.field('gmean.ratio', div(point._fields['gmean.curr'], point._fields['gmean.prev']))
 
                 # Fill up tags.
-                point = point.tag('date.prev', int(record['_time'].timestamp() * 10**9))  # convert to nanoseconds
+                point = point.tag('record_date.prev', int(record['_time'].timestamp() * 10**9))  # convert to ns
                 for tag_key in tags_prev:
                     point = point.tag(tag_key, record[tag_key.replace('.prev', '.curr')])
             else:
