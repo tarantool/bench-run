@@ -187,7 +187,7 @@ def main(args):
 
         if args.save:
             with open(args.save, 'w') as f:
-                f.write(point.to_line_protocol())
+                f.write(point.to_line_protocol() + '\n')
         else:
             print(point)
 
