@@ -150,7 +150,7 @@ def main(args):
 
     if args.output:
         with open(args.output, 'w') as f:
-            f.write(table)
+            f.write(table + '\n')
     else:
         print(table)
 
