@@ -10,7 +10,7 @@ import sys
 import time
 
 import git
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 NA_STR = 'n/a'
@@ -119,10 +119,10 @@ def main(args):
             'build_version.curr': repo.git.describe(),
             'author_name.curr': repo.head.commit.author.name,
             'author_email.curr': repo.head.commit.author.email,
-            'authored_date.curr': repo.head.commit.authored_date * 10**9,  # convert to nanoseconds
+            'authored_date.curr': repo.head.commit.authored_date,
             'committer_name.curr': repo.head.commit.committer.name,
             'committer_email.curr': repo.head.commit.committer.email,
-            'committed_date.curr': repo.head.commit.committed_date * 10**9,  # convert to nanoseconds
+            'committed_date.curr': repo.head.commit.committed_date,
             'commit_summary.curr': repo.head.commit.summary,
             'machine_type.curr': platform.machine(),
             'distribution_type.curr': 'ce',
@@ -177,14 +177,14 @@ def main(args):
                 point = point.field('gmean.ratio', div(point._fields['gmean.curr'], point._fields['gmean.prev']))
 
                 # Fill up tags.
-                point = point.tag('record_date.prev', int(record['_time'].timestamp() * 10**9))  # convert to ns
+                point = point.tag('record_date.prev', int(record['_time'].timestamp()))
                 for tag_key in tags_prev:
                     point = point.tag(tag_key, record[tag_key.replace('.prev', '.curr')])
             else:
                 print('\nWARNING: No previous DB record found\n')
 
         # Publish data.
-        point = point.time(time.time() * 10**9)  # convert to nanoseconds
+        point = point.time(int(time.time()), WritePrecision.S)
         client.write_api(write_options=SYNCHRONOUS).write(args.bucket, args.org, point)
 
         if args.save:
