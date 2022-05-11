@@ -96,6 +96,9 @@ def main(args):
     except git.exc.InvalidGitRepositoryError:
         # Re-raise the error with a comprehensive description.
         raise git.exc.InvalidGitRepositoryError(f"Not a git repository: {os.path.abspath(args.repo)}")
+    else:
+        if os.path.basename(repo.remotes.origin.url.split('.git')[0]) != 'tarantool':
+            raise git.exc.InvalidGitRepositoryError(f"Not a Tarantool git repository: {os.path.abspath(args.repo)}")
 
     with InfluxDBClient(url=args.url, token=args.token, org=args.org) as client:
         point = Point(args.measurement)
