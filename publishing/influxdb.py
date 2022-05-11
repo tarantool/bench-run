@@ -7,6 +7,7 @@ import math
 import os
 import platform
 import sys
+import time
 
 import git
 from influxdb_client import InfluxDBClient, Point
@@ -183,6 +184,7 @@ def main(args):
                 print('\nWARNING: No previous DB record found\n')
 
         # Publish data.
+        point = point.time(time.time() * 10**9)  # convert to nanoseconds
         client.write_api(write_options=SYNCHRONOUS).write(args.bucket, args.org, point)
 
         if args.save:
