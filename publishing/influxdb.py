@@ -119,7 +119,7 @@ def main(args):
         tags_curr = {
             'branch_name.curr': repo.active_branch.name,
             'commit_sha.curr': repo.head.commit.hexsha,
-            'build_version.curr': repo.git.describe(),
+            'build_version.curr': repo.git.describe('--long'),
             'author_name.curr': repo.head.commit.author.name,
             'author_email.curr': repo.head.commit.author.email,
             'authored_date.curr': repo.head.commit.authored_date,
