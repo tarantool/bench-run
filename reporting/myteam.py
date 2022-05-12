@@ -62,7 +62,7 @@ def main(args):
         # There is no 'Text' parse mode, defined for convenience.
         args.format = None
     elif args.format == 'MarkdownV2':
-        message = f"```\n{message}```"
+        message = f"```\n{message}\n```"
 
     response = bot.send_text(chat_id=args.chat_id, text=message, parse_mode=args.format)
     assert response.json()['ok'], response.json()
