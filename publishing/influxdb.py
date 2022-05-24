@@ -13,9 +13,6 @@ import git
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-NA_STR = 'n/a'
-PREV_RECORD_TIME_RANGE = '-1mo'  # in months
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Publish Tarantool performance metrics to InfluxDB database')
@@ -43,9 +40,6 @@ def parse_args():
     parser.add_argument('-b', '--bucket', default=env_opt('INFLUXDB_BUCKET'), help='InfluxDB bucket name')
     parser.add_argument(
         '-t', '--token', default=env_opt('INFLUXDB_TOKEN'), help='InfluxDB token for making API requests'
-    )
-    parser.add_argument(
-        '-p', '--prev', action='store_true', help='Add data of the previous DB record to the new record'
     )
 
     return parser.parse_args()
@@ -82,11 +76,6 @@ def gmean(dataset, precision=3):
     return round(math.exp(math.fsum(math.log(item) for item in dataset) / len(dataset)), precision)
 
 
-def div(a, b, precision=3):
-    # `a` - 'curr' value, `b` - 'prev' value.
-    return round(a / b, precision)
-
-
 def main(args):
     validate_args(args)
 
@@ -104,87 +93,28 @@ def main(args):
         point = Point(args.measurement)
 
         # Add fields.
-
         for field_key, field_value in metrics.items():
-            point = point.field(f"{field_key}.curr", field_value)
-            point = point.field(f"{field_key}.prev", -1.0)  # -1 means 'not defined'
-            point = point.field(f"{field_key}.ratio", -1.0)
-
-        point = point.field('gmean.curr', gmean(metrics.values()))
-        point = point.field('gmean.prev', -1.0)
-        point = point.field('gmean.ratio', -1.0)
+            point = point.field(field_key, field_value)
+        point = point.field('gmean', gmean(metrics.values()))
 
         # Add tags.
-
-        tags_curr = {
-            'branch_name.curr': repo.active_branch.name,
-            'commit_sha.curr': repo.head.commit.hexsha,
-            'build_version.curr': repo.git.describe('--long'),
-            'author_name.curr': repo.head.commit.author.name,
-            'author_email.curr': repo.head.commit.author.email,
-            'authored_date.curr': repo.head.commit.authored_date,
-            'committer_name.curr': repo.head.commit.committer.name,
-            'committer_email.curr': repo.head.commit.committer.email,
-            'committed_date.curr': repo.head.commit.committed_date,
-            'commit_summary.curr': repo.head.commit.summary,
-            'machine_type.curr': platform.machine(),
-            'distribution_type.curr': 'ce',
-            'gc64_enabled.curr': 'false',
+        tags = {
+            'branch_name': 'master', #repo.active_branch.name,
+            'commit_sha': repo.head.commit.hexsha,
+            'build_version': repo.git.describe('--long'),
+            'author_name': repo.head.commit.author.name,
+            'author_email': repo.head.commit.author.email,
+            'authored_date': repo.head.commit.authored_date,
+            'committer_name': repo.head.commit.committer.name,
+            'committer_email': repo.head.commit.committer.email,
+            'committed_date': repo.head.commit.committed_date,
+            'commit_summary': repo.head.commit.summary,
+            'machine_type': platform.machine(),
+            'distribution_type': 'ce',
+            'gc64_enabled': 'false',
         }
-        tags_prev = {
-            'branch_name.prev': NA_STR,
-            'commit_sha.prev': NA_STR,
-            'build_version.prev': NA_STR,
-            'author_name.prev': NA_STR,
-            'author_email.prev': NA_STR,
-            'authored_date.prev': NA_STR,
-            'committer_name.prev': NA_STR,
-            'committer_email.prev': NA_STR,
-            'committed_date.prev': NA_STR,
-            'commit_summary.prev': NA_STR,
-            'machine_type.prev': NA_STR,
-            'distribution_type.prev': NA_STR,
-            'gc64_enabled.prev': NA_STR,
-        }
-
-        point = point.tag('record_date.prev', NA_STR)
-        for tag_key, tag_value in {**tags_curr, **tags_prev}.items():
+        for tag_key, tag_value in tags.items():
             point = point.tag(tag_key, tag_value)
-
-        # Add data of the previous DB record to the new record.
-        if args.prev:
-            query = (
-                f"from(bucket: \"{args.bucket}\") "
-                f"|> range(start: {PREV_RECORD_TIME_RANGE}) "
-                f"|> filter(fn: (r) => r._measurement == \"{args.measurement}\") "
-                f"|> filter(fn: (r) => r[\"branch_name.curr\"] == \"{repo.active_branch.name}\") "
-                f"|> group(columns: [\"_time\"], mode: \"by\") "
-                f"|> sort(columns: [\"_time\"])"
-            )
-
-            # Fill up fields.
-
-            tables = client.query_api().query(query, org=args.org)
-            if tables:
-                # Tables are sorted by time. So taking the latest one.
-                for record in tables[-1]:
-                    if record['_field'] == 'gmean.curr':
-                        point = point.field('gmean.prev', record['_value'])
-                    elif not record['_field'].startswith('gmean') and record['_field'].endswith('.curr'):
-                        field_key = record['_field'].replace('.curr', '.prev')
-                        point = point.field(field_key, record['_value'])
-                        point = point.field(
-                            field_key.replace('.prev', '.ratio'), div(point._fields[record['_field']], record['_value'])
-                        )
-
-                point = point.field('gmean.ratio', div(point._fields['gmean.curr'], point._fields['gmean.prev']))
-
-                # Fill up tags.
-                point = point.tag('record_date.prev', int(record['_time'].timestamp()))
-                for tag_key in tags_prev:
-                    point = point.tag(tag_key, record[tag_key.replace('.prev', '.curr')])
-            else:
-                print('\nWARNING: No previous DB record found\n')
 
         # Publish data.
         point = point.time(int(time.time()), WritePrecision.S)

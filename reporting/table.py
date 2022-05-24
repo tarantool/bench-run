@@ -33,11 +33,17 @@ PLACEHOLDER_TO_CHAR = {'<space>': ' ', '<coma>': ',', '<equal>': '='}
 def parse_args():
     parser = argparse.ArgumentParser(description='Make a result table with Tarantool performance metrics')
     parser.add_argument(
-        '-i',
-        '--input',
+        '-c',
+        '--curr',
         required=True,
         metavar='FILE',
-        help="Path to the file with InfluxDB record in the 'line protocol' form",
+        help="Path to the file with 'current' InfluxDB record in the 'line protocol' form",
+    )
+    parser.add_argument(
+        '-p',
+        '--prev',
+        metavar='FILE',
+        help="Path to the file with 'previous' InfluxDB record in the 'line protocol' form",
     )
     parser.add_argument(
         '-o',
@@ -51,8 +57,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_db_record(file_path):
-    record = {'name': {}, 'fields': {}, 'tags': {}}
+def load_db_record(file_path, record_type, record=None):
+    if not record:
+        record = {'name': None, 'fields': {}, 'tags': {}}
 
     with open(file_path) as f:
         contents = f.read().strip()
@@ -62,16 +69,26 @@ def load_db_record(file_path):
     record['name'], raw_tags_part = left_record_part.partition(',')[::2]
 
     for raw_metric_entry in right_record_part.split(','):
-        full_metric_name, metric_value = raw_metric_entry.partition('=')[::2]
-        metric_name, metric_type = full_metric_name.rpartition('.')[::2]
-        record['fields'].setdefault(metric_type, {})[metric_name] = float(metric_value)
+        metric_name, metric_value = raw_metric_entry.partition('=')[::2]
+        record['fields'].setdefault(record_type, {})[metric_name] = float(metric_value)
+        if record_type == 'curr':
+            record['fields'].setdefault('prev', {})[metric_name] = math.nan
+            record['fields'].setdefault('ratio', {})[metric_name] = math.nan
+        if record_type == 'prev':
+            record['fields']['ratio'][metric_name] = div(record['fields']['curr'][metric_name], float(metric_value))
 
     for raw_tag_entry in replace(raw_tags_part, ESCAPE_TO_PLACEHOLDER).split(','):
-        full_tag_name, tag_value = raw_tag_entry.partition('=')[::2]
-        tag_name, tag_type = full_tag_name.rpartition('.')[::2]
-        record['tags'].setdefault(tag_type, {})[tag_name] = replace(tag_value, PLACEHOLDER_TO_CHAR)
+        tag_name, tag_value = raw_tag_entry.partition('=')[::2]
+        record['tags'].setdefault(record_type, {})[tag_name] = replace(tag_value, PLACEHOLDER_TO_CHAR)
+        if record_type == 'curr':
+            record['tags'].setdefault('prev', {})[tag_name] = 'n/a'
 
     return record
+
+
+def div(a, b, precision=3):
+    # `a` - 'curr' value, `b` - 'prev' value.
+    return round(a / b, precision)
 
 
 def replace(string, replace_map):
@@ -125,14 +142,17 @@ def gen_table(columns, column_names=None, name_column_size='auto', val_column_si
 
 
 def main(args):
-    record = load_db_record(args.input)
+    record = load_db_record(args.curr, 'curr')
+    if args.prev:
+        record = load_db_record(args.prev, 'prev', record)
+
     columns = {'metric': [], 'curr': [], 'prev': [], 'ratio': []}
 
     for metric_type in record['fields']:
         for metric_name, value in sorted(record['fields'][metric_type].items(), key=lambda x: x[0]):
             if metric_name not in columns.get('metric', []):
                 columns['metric'].append(metric_name)
-            columns[metric_type].append(value if value > -1 else math.nan)
+            columns[metric_type].append(value)
 
     comments_template = COMMENTS_TEMPLATE.lstrip()
     curr_date = dt.fromtimestamp(int(record['tags']['curr']['committed_date'])).strftime('%a %d %b %H:%M:%S %Y %z')
